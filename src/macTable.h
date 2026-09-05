@@ -24,6 +24,7 @@ private:
         for (int i = 5; i>=0; --i){
             num += addr[i] << i*8;
         }
+        return 0;
     }
 };
 
