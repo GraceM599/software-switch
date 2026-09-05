@@ -13,6 +13,9 @@
 #include <cstring> 
 class Port{
 public:
+    Port(){
+        //empty
+    }
     Port(std::string interface_name){
         fd = open("/dev/net/tun", O_RDWR);
         if(fd < 0){
@@ -41,6 +44,9 @@ public:
               << std::hex << (int)pkt[0] << std::endl;
         write(fd, pkt, length);
         return;
+    }
+    int get_fd(){
+        return fd;
     }
     ~Port(){
         close(fd);
