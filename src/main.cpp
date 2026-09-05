@@ -19,7 +19,6 @@ void initPorts(Port* portList, pollfd* ports, int numPorts){
 void pollPort(Port* portList, pollfd* ports, uint8_t*& buffer, uint8_t& ingress, ssize_t& pkt_len){
     //fills buffer with the next packet to be processed. Assigns ingress
     //to the incoming interface.
-    //poll all ports with actually scheduling algos but for now
     std::vector<int> ready_ports;
 
     if (poll(ports, 4, 1000)){
@@ -36,11 +35,6 @@ void pollPort(Port* portList, pollfd* ports, uint8_t*& buffer, uint8_t& ingress,
         pkt_len = portList[ingress].get(buffer);
     }
 
-}
-
-void mac(uint8_t* addr){
-    //gets the mac address given ip using arp ig?
-    //like resolving interface cause ip is usally provided on startup?
 }
 
 int main() {
