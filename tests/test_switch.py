@@ -18,9 +18,9 @@ class TestSwitch:
         sniffer.join() #block until 1 pkt recieved
         captured_frames = sniffer.results
         #import pdb; pdb.set_trace()
-        assert len(captured_frames) == 1, "Failed: The packet was not flooded out of tap1!"
+        assert len(captured_frames) == 1, "The packet was not flooded out of tap1"
         
         rx_packet = captured_frames[0]
-        assert rx_packet.src == "00:11:22:33:44:55", "Failed: Source MAC was altered!"
-        assert rx_packet.dst == "66:77:88:99:aa:bb", "Failed: Destination MAC was altered!"
-        print("Success: Unknown Unicast Flooding test passed!")
+        assert rx_packet.src == "00:11:22:33:44:55", "Source MAC was altered"
+        assert rx_packet.dst == "66:77:88:99:aa:bb", "Destination MAC was altered"
+        print("Unknown Unicast Flooding test passed")
