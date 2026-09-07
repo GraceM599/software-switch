@@ -53,7 +53,6 @@ public:
     }
 private:
     int fd;
-    uint8_t buffer[1518];
 
 };
 

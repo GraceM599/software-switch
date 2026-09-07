@@ -6,16 +6,17 @@
 #include "macTable.h" 
 #include <poll.h>
 #include <vector>
+#include <csignal>
  
-void initPorts(Port* portList, pollfd* ports, int numPorts){
-    for (int i = 0; i< numPorts; ++i){
-        portList[i] = Port("port" + std::to_string(i));
-        ports[i] = pollfd();
-        ports[i].fd = portList[i].get_fd();
-        ports[i].events = POLLIN;
+volatile sig_atomic_t continue_running = 1;
 
+void handle_signal(int signal_num){
+    if (signal_num == SIGTERM || signal_num == SIGINT){
+        continue_running = 0;
     }
+    return;
 }
+
 void pollPort(Port* portList, pollfd* ports, uint8_t*& buffer, uint8_t& ingress, ssize_t& pkt_len){
     //fills buffer with the next packet to be processed. Assigns ingress
     //to the incoming interface.
@@ -38,10 +39,27 @@ void pollPort(Port* portList, pollfd* ports, uint8_t*& buffer, uint8_t& ingress,
 }
 
 int main() {
-    std::cout << "Switch starting" << std::endl;
-    Port portList[4];
+    std::cout << "Switch main() starting" << std::endl;
+
+    struct sigaction sa;
+    std::memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = handle_signal;
+    sigaction(SIGTERM, &sa, nullptr);
+    sigaction(SIGINT, &sa, nullptr);
+
+    Port portList[4] = {
+        Port("tap0"),
+        Port("tap1"),
+        Port("tap2"),
+        Port("tap3")
+    };
+
     pollfd ports[4];
-    initPorts(portList, ports, 4);
+    for (int i = 0; i < 4; ++i) {
+        ports[i].fd = portList[i].get_fd();
+        ports[i].events = POLLIN;
+        ports[i].revents = 0;
+    }
     MacTable mac_table;
 
     uint8_t* buffer;
@@ -49,7 +67,7 @@ int main() {
     ssize_t pkt_len = 0; 
     uint8_t packet_pool[1518];
 
-    while (true) { //fc
+    while (continue_running) { //fc
         buffer = packet_pool;
         pkt_len = 0;
 
