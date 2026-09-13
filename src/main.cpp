@@ -51,10 +51,10 @@ int main() {
     sigaction(SIGINT, &sa, nullptr);
 
     Port portList[4] = {
-        Port("tap0"),
-        Port("tap1"),
-        Port("tap2"),
-        Port("tap3")
+        {"tap0"},
+        {"tap1"},
+        {"tap2"},
+        {"tap3"}
     };
 
     pollfd ports[4];

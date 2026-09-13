@@ -70,6 +70,7 @@ def test_mininet():
             run("ip link set {} up".format(bridge))
 
             run("ip link set {} master {}".format(root_if, bridge))
+            run("ip link set {} up".format(root_if))
             run("ip link set {} master {}".format(tap, bridge))
 
         CLI(net)
