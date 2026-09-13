@@ -5,7 +5,8 @@ from mininet.cli import CLI
 from mininet.log import setLogLevel
 import subprocess
 
-
+#todo, topology setup works alr but the mininet api doesn't see the interfaces so
+#like h1 ping h2 crashes. :)
 def run(cmd):
     print("$ {}".format(cmd))
     subprocess.run(cmd, shell=True, check=True)
