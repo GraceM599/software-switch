@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
 from mininet.net import Mininet
+from mininet.link import Intf
 from mininet.cli import CLI
 from mininet.log import setLogLevel
 import subprocess
 
-#todo, topology setup works alr but the mininet api doesn't see the interfaces so
-#like h1 ping h2 crashes. :)
+
 def run(cmd):
     print("$ {}".format(cmd))
     subprocess.run(cmd, shell=True, check=True)
@@ -31,19 +31,35 @@ def test_mininet():
             host_if = "{}-eth0".format(host.name)
             root_if = "sw{}".format(i)
 
+            # Create the veth pair in the root namespace.
             run(
                 "ip link add {} type veth peer name {}".format(
                     root_if, host_if
                 )
             )
 
+            # Move the host side into the host's namespace.
             run(
                 "ip link set {} netns {}".format(
                     host_if, host.pid
                 )
             )
 
-            host.cmd("ip link set {} up".format(host_if))
+            #The interface has already been
+            # moved, so don't let addIntf() move it again.
+            Intf(
+                host_if,
+                node=host,
+                moveIntfFn=lambda name, node: None
+            )
+
+            # Configure the IP that was specified when the host
+            # was created.
+            host.setIP(
+                "10.0.0.{}/24".format(i + 1),
+                intf=host_if
+            )
+
             root_ifs.append(root_if)
 
         for i, root_if in enumerate(root_ifs):

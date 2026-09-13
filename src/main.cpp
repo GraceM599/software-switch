@@ -40,6 +40,7 @@ void pollPort(Port* portList, pollfd* ports, uint8_t*& buffer, uint8_t& ingress,
 
 }
 
+
 int main() {
     std::cout << "Switch main() starting" << std::endl;
 
