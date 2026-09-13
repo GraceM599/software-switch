@@ -38,7 +38,7 @@ public:
             close(fd);
             fd = -1;
         }
-        std::string file_name = interface_name + "log";
+        std::string file_name = "logs/" + interface_name + "log";
         log_file.open(file_name.c_str());
 
         if (!log_file){
