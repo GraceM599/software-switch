@@ -22,12 +22,14 @@ void pollPort(Port* portList, pollfd* ports, uint8_t*& buffer, uint8_t& ingress,
     //to the incoming interface.
     std::vector<int> ready_ports;
 
-    if (poll(ports, 4, 1000)){
-        //msg ready
-        for (int i = 0; i < 4; ++i){
-            if(ports[i].revents & POLLIN){
-                ready_ports.push_back(i);
-            }
+    int result = poll(ports, 4, 1000);
+    if (result <= 0) {
+        return;
+    }
+    //msg ready
+    for (int i = 0; i < 4; ++i){
+        if(ports[i].revents & POLLIN){
+            ready_ports.push_back(i);
         }
     }
     //implement a scheduling algo but for now

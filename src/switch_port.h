@@ -11,6 +11,7 @@
 #include <linux/if.h>     
 #include <linux/if_tun.h> 
 #include <cstring> 
+#include <cerrno>
 class Port{
 public:
     Port(){
@@ -29,10 +30,21 @@ public:
         std::strncpy(ifr.ifr_name, interface_name.c_str(), IFNAMSIZ);
 
         if (ioctl(fd, TUNSETIFF, (void*)&ifr) < 0) {
-            std::cerr << "Error running ioctl TUNSETIFF on " << interface_name << std::endl;
+            std::cerr << "Error running ioctl TUNSETIFF on "
+              << interface_name
+              << ": "
+              << std::strerror(errno)
+              << std::endl;
             close(fd);
             fd = -1;
         }
+        std::string file_name = interface_name + "log";
+        log_file.open(file_name.c_str());
+
+        if (!log_file){
+            std::cerr << "Error opening log file on " << interface_name << std::endl;
+        }
+
 
     }
     ssize_t get(uint8_t* out_buffer){
@@ -40,7 +52,7 @@ public:
         return bytes_read;
     }
     void send(uint8_t* pkt, size_t length){
-        std::cout << "Port successfully transmitted packet starting with byte: " 
+        log_file << "Port successfully transmitted packet starting with byte: " 
               << std::hex << (int)pkt[0] << std::endl;
         write(fd, pkt, length);
         return;
@@ -53,6 +65,7 @@ public:
     }
 private:
     int fd;
+    std::ofstream log_file;
 
 };
 
