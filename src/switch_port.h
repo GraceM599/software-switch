@@ -49,13 +49,13 @@ public:
     }
     ssize_t get(uint8_t* out_buffer){
         ssize_t bytes_read = read(fd, out_buffer, 1518);
-        log_file << "Port successfully recieved packet starting with byte: "
-        << std::hex << (int)out_buffer[0] << std::endl;
+        //log_file << "Port successfully recieved packet starting with byte: "
+        //<< std::hex << (int)out_buffer[0] << std::endl;
         return bytes_read;
     }
     void send(uint8_t* pkt, size_t length){
-        log_file << "Port successfully transmitted packet starting with byte: " 
-              << std::hex << (int)pkt[0] << std::endl;
+        //log_file << "Port successfully transmitted packet starting with byte: " 
+        //      << std::hex << (int)pkt[0] << std::endl;
         write(fd, pkt, length);
         return;
     }
