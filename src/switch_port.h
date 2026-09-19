@@ -12,12 +12,14 @@
 #include <linux/if_tun.h> 
 #include <cstring> 
 #include <cerrno>
+#include "ring_buffer.h"
 class Port{
 public:
     Port(){
         //empty
     }
     Port(std::string interface_name){
+        interface = interface_name;
         fd = open("/dev/net/tun", O_RDWR);
         if(fd < 0){
             std::cerr << "Error opening /dev/net/tun." << std::endl;
@@ -38,24 +40,18 @@ public:
             close(fd);
             fd = -1;
         }
-        std::string file_name = "logs/" + interface_name + "log";
-        log_file.open(file_name.c_str());
-
-        if (!log_file){
-            std::cerr << "Error opening log file on " << interface_name << std::endl;
-        }
-
 
     }
     ssize_t get(uint8_t* out_buffer){
         ssize_t bytes_read = read(fd, out_buffer, 1518);
-        //log_file << "Port successfully recieved packet starting with byte: "
-        //<< std::hex << (int)out_buffer[0] << std::endl;
+        std::string log = interface + " recieved packet" + "\n";
+        logger.addEntry(log); 
+
         return bytes_read;
     }
     void send(uint8_t* pkt, size_t length){
-        //log_file << "Port successfully transmitted packet starting with byte: " 
-        //      << std::hex << (int)pkt[0] << std::endl;
+        std::string log = interface + "sent packet with length " + std::to_string(length) + "\n";
+        logger.addEntry(log); 
         write(fd, pkt, length);
         return;
     }
@@ -64,11 +60,11 @@ public:
     }
     ~Port(){
         close(fd);
-        log_file.close();
     }
 private:
     int fd;
-    std::ofstream log_file;
+    ringBuffer logger;
+    std::string interface;
 
 };
 
