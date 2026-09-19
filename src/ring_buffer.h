@@ -4,7 +4,7 @@
 #include <iostream>
 #include <string.h>
 
-#define BUFFER_LEN 20000
+#define BUFFER_LEN 400000
 class ringBuffer{
     
 public:

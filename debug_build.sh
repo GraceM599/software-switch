@@ -1,3 +1,3 @@
 #!/bin/bash
-cmake -DCMAKE_BUILD_TYPE=Debug -S . -B build
-cmake --build build
+
+g++ -std=c++2a -O3 -g -DNDEBUG src/*.cpp -o build/switch
