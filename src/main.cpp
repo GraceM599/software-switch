@@ -17,17 +17,17 @@ void handle_signal(int signal_num){
     return;
 }
 
-void pollPort(Port* portList, pollfd* ports, uint8_t*& buffer, uint8_t& ingress, ssize_t& pkt_len){
+void pollPort(std::vector<Port>& portList, std::vector<pollfd>& ports, uint8_t*& buffer, uint8_t& ingress, ssize_t& pkt_len){
     //fills buffer with the next packet to be processed. Assigns ingress
     //to the incoming interface.
     std::vector<int> ready_ports;
 
-    int result = poll(ports, 4, 1000);
+    int result = poll(ports.data(), portList.size(), 1000);
     if (result <= 0) {
         return;
     }
     //msg ready
-    for (int i = 0; i < 4; ++i){
+    for (int i = 0; i < portList.size(); ++i){
         if(ports[i].revents & POLLIN){
             ready_ports.push_back(i);
         }
@@ -41,7 +41,7 @@ void pollPort(Port* portList, pollfd* ports, uint8_t*& buffer, uint8_t& ingress,
 }
 
 
-int main() {
+int main(int argc, char** argv) {
     std::cout << "Switch main() starting" << std::endl;
 
     struct sigaction sa;
@@ -50,18 +50,16 @@ int main() {
     sigaction(SIGTERM, &sa, nullptr);
     sigaction(SIGINT, &sa, nullptr);
 
-    Port portList[4] = {
-        {"tap0"},
-        {"tap1"},
-        {"tap2"},
-        {"tap3"}
-    };
-
-    pollfd ports[4];
-    for (int i = 0; i < 4; ++i) {
-        ports[i].fd = portList[i].get_fd();
-        ports[i].events = POLLIN;
-        ports[i].revents = 0;
+    std::vector<Port> portList;
+    std::vector<pollfd> ports;
+    for (int i = 0; i < argc-1; ++i){
+        std::string intf_name = argv[1+i];
+        portList.push_back(Port(intf_name));
+        pollfd pfd;
+        pfd.fd = portList[i].get_fd();
+        pfd.events = POLLIN;
+        pfd.revents = 0;
+        ports.push_back(pfd);
     }
     MacTable mac_table;
 

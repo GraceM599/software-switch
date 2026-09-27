@@ -4,7 +4,7 @@ import time
 import os
 import signal
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="session", autouse=False)
 def network_enviroment():
     print("creating tap interfaces")
     interfaces = ["tap0", "tap1", "tap2", "tap3"]
