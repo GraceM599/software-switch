@@ -8,11 +8,10 @@
 class ringBuffer{
     
 public:
-   ringBuffer(){
+   explicit ringBuffer(std::string file_name = "logs/switch_log"){
       head = 0;
       tail = 0;
 
-      std::string file_name = "logs/switch_log";
       log_file.open(file_name.c_str());
 
       if (!log_file){
@@ -35,6 +34,7 @@ public:
 
    void writeEntries(){
       log_file.write(buffer, tail-head);
+      log_file.flush();
       head = 0;
       tail = 0;
 
