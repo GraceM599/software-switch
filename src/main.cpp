@@ -19,10 +19,18 @@ void handle_signal(int signal_num){
     return;
 }
 
-void pollPort(std::vector<std::unique_ptr<Port>>& portList, std::vector<pollfd>& ports, uint8_t*& buffer, size_t buffer_size, uint8_t& ingress, ssize_t& pkt_len){
+void pollPort(std::vector<std::unique_ptr<Port>>& portList, std::vector<pollfd>& ports, uint8_t*& buffer, size_t buffer_size, uint8_t& ingress, ssize_t& pkt_len, size_t& next_port){
     //fills buffer with the next packet to be processed. Assigns ingress
     //to the incoming interface.
-    std::vector<int> ready_ports;
+    for (size_t checked = 0; checked < portList.size(); ++checked) {
+        size_t i = (next_port + checked) % portList.size();
+        if (portList[i]->has_pending_packet()) {
+            ingress = i;
+            next_port = (i + 1) % portList.size();
+            pkt_len = portList[i]->get(buffer, buffer_size);
+            return;
+        }
+    }
 
     int result = poll(ports.data(), ports.size(), 1000);
     if (result < 0) {
@@ -34,18 +42,16 @@ void pollPort(std::vector<std::unique_ptr<Port>>& portList, std::vector<pollfd>&
     if (result == 0) {
         return;
     }
-    //msg ready
-    for (int i = 0; i < portList.size(); ++i){
-        if(ports[i].revents & POLLIN){
-            ready_ports.push_back(i);
+
+    for (size_t checked = 0; checked < ports.size(); ++checked) {
+        size_t i = (next_port + checked) % ports.size();
+        if (ports[i].revents & POLLIN) {
+            ingress = i;
+            next_port = (i + 1) % ports.size();
+            pkt_len = portList[i]->get(buffer, buffer_size);
+            return;
         }
     }
-    //implement a scheduling algo but for now
-    if (!ready_ports.empty()){
-        ingress = ready_ports[0];
-        pkt_len = portList[ingress]->get(buffer, buffer_size);
-    }
-
 }
 
 
@@ -81,6 +87,7 @@ int main(int argc, char** argv) {
 
     uint8_t* buffer;
     uint8_t ingress_port;
+    size_t next_port = 0;
     ssize_t pkt_len = 0; 
     uint8_t packet_pool[65536];
 
@@ -89,7 +96,7 @@ int main(int argc, char** argv) {
         pkt_len = 0;
 
         pollPort(portList, ports, buffer, sizeof(packet_pool),
-                 ingress_port, pkt_len);
+                 ingress_port, pkt_len, next_port);
 
         if (pkt_len <= 0) continue; 
         if (pkt_len < static_cast<ssize_t>(sizeof(EthernetHeader))) {

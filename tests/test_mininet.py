@@ -52,6 +52,15 @@ def test_mininet():
             )
 
             host.cmd("ip link set {} up".format(host_if))
+            offload_status = host.cmd(
+                "ethtool -K {} tx off; echo $?".format(host_if)
+            ).splitlines()
+            if not offload_status or offload_status[-1] != "0":
+                raise RuntimeError(
+                    "Could not disable TX checksum offload on {}".format(
+                        host_if
+                    )
+                )
             host.cmd(
                 "ip addr flush dev {}".format(host_if)
             )

@@ -86,7 +86,7 @@ public:
 
         tx_req.tp_block_size = 1 << 20;
         tx_req.tp_block_nr = 8;
-        tx_req.tp_frame_size = 1 << 11;
+        tx_req.tp_frame_size = 1 << 16;
         tx_req.tp_frame_nr = (tx_req.tp_block_size / tx_req.tp_frame_size) * tx_req.tp_block_nr;
         tx_ring_size = static_cast<size_t>(tx_req.tp_block_size) * tx_req.tp_block_nr;
 
@@ -176,8 +176,8 @@ public:
 
             uint8_t* frame_data = reinterpret_cast<uint8_t*>(frame) + data_offset;
             memcpy(frame_data, packet, length);
-            frame->tp_mac = 0;
-            frame->tp_net = 0;
+            frame->tp_mac = data_offset;
+            frame->tp_net = data_offset + ETH_HLEN;
             frame->tp_len = length;
             frame->tp_snaplen = length;
             std::atomic_thread_fence(std::memory_order_release);
@@ -199,6 +199,21 @@ public:
 
     int get_fd() const {
         return fd;
+    }
+
+    bool has_pending_packet() const {
+        for (unsigned int i = 0; i < rx_req.tp_block_nr; ++i) {
+            size_t block_idx = (rx_block_idx + i) % rx_req.tp_block_nr;
+            size_t offset = block_idx * rx_req.tp_block_size;
+            auto* block = reinterpret_cast<tpacket_block_desc*>(
+                static_cast<char*>(rx_ring) + offset
+            );
+            if ((block->hdr.bh1.block_status & TP_STATUS_USER) != 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     bool is_valid() const {
