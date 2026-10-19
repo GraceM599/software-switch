@@ -8,7 +8,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/ioctl.h>    
-#include <linux/if.h>     
 #include <linux/if_tun.h> 
 #include <cstring> 
 #include <cerrno>
@@ -16,6 +15,7 @@
 #include <linux/if_packet.h>
 #include <netinet/in.h>
 #include <sys/mman.h>
+#include <net/if.h>
 
 class Port{
 public:
@@ -93,8 +93,9 @@ public:
             struct tpacket_block_desc* current_block =  reinterpret_cast<tpacket_block_desc*>(ring_start + offset);
 
             if (current_block->hdr.bh1.block_status == TP_STATUS_USER){
-                void* first_pkt = current_block->hdr.bh1.ts_first_pkt;
-                memcpy(out_buffer, first_pkt->packet_data, len(data));
+                auto offset_to_first = current_block->hdr.bh1.offset_to_first_pkt;
+                auto first_pkt = current_block + offset_to_first;
+                memcpy(out_buffer, first_pkt.packet_data, len(data));
             }
         }
         
