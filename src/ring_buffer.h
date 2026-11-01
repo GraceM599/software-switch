@@ -1,4 +1,6 @@
-#pragma once
+#ifndef RING_BUFFER
+#define RING_BUFFER
+
 #include <cstdint>
 #include <fstream>
 #include <iostream>
@@ -8,44 +10,15 @@
 class ringBuffer{
     
 public:
-   explicit ringBuffer(std::string file_name = "logs/switch_log"){
-      head = 0;
-      tail = 0;
+   ringBuffer(std::string file_name);
+   bool addEntry(std::string log);
 
-      log_file.open(file_name.c_str());
-
-      if (!log_file){
-         std::cerr << "Error opening log file: " << file_name << std::endl;
-      }
-
-
-      return;
-   }
-   bool addEntry(std::string log){
-      if(tail + log.size() > BUFFER_LEN){
-         //writing would overwrite other data
-         //figure out a way to resolve this for now return after clearing
-         writeEntries();
-      }
-      memcpy(buffer + tail, log.c_str(), log.size());
-      tail += log.size();
-      return true;
-   }
-
-   void writeEntries(){
-      log_file.write(buffer, tail-head);
-      log_file.flush();
-      head = 0;
-      tail = 0;
-
-   }
-   ~ringBuffer(){
-      writeEntries();
-      log_file.close();
-   }
+   void writeEntries();
+   ~ringBuffer();
 private:
    size_t head;
    size_t tail;
    char buffer[BUFFER_LEN];
    std::ofstream log_file;
 };
+#endif
