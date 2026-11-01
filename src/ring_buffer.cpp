@@ -1,6 +1,5 @@
 #include "ring_buffer.h"
 
-
 ringBuffer::ringBuffer(std::string file_name = "logs/switch_log"){
       head = 0;
       tail = 0;
