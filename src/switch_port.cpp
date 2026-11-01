@@ -207,3 +207,35 @@ bool Port::is_valid() const {
 Port::~Port() {
     release();
 }
+
+
+void Port::fail(const std::string& message) {
+    std::cerr << message << ": " << std::strerror(errno) << std::endl;
+    release();
+}
+
+void Port::release_rx_block(tpacket_block_desc* block, size_t block_idx) {
+    rx_offset_next_pkt = 0;
+    std::atomic_thread_fence(std::memory_order_release);
+    block->hdr.bh1.block_status = TP_STATUS_KERNEL;
+    rx_block_idx = (block_idx + 1) % rx_req.tp_block_nr;
+}
+
+void Port::release() {
+    if (rx_ring != MAP_FAILED && rx_ring != nullptr) {
+        munmap(rx_ring, rx_ring_size);
+        rx_ring = MAP_FAILED;
+    }
+    if (tx_ring != MAP_FAILED && tx_ring != nullptr) {
+        munmap(tx_ring, tx_ring_size);
+        tx_ring = MAP_FAILED;
+    }
+    if (fd >= 0) {
+        close(fd);
+        fd = -1;
+    }
+    if (tx_fd >= 0) {
+        close(tx_fd);
+        tx_fd = -1;
+    }
+}
