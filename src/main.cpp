@@ -8,9 +8,9 @@
 #include <vector>
 #include <memory>
 #include <csignal>
- 
+ #include <thread>
 volatile sig_atomic_t continue_running = 1;
-
+MacTable mac_table;
 void handle_signal(int signal_num){
     if (signal_num == SIGTERM || signal_num == SIGINT){
         continue_running = 0;
@@ -53,37 +53,7 @@ void pollPort(std::vector<std::unique_ptr<Port>>& portList, std::vector<pollfd>&
     }
 }
 
-
-int main(int argc, char** argv) {
-    std::cout << "Switch main() starting" << std::endl;
-    if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " <interface> [interface ...]"
-                  << std::endl;
-        return 2;
-    }
-
-    struct sigaction sa;
-    std::memset(&sa, 0, sizeof(sa));
-    sa.sa_handler = handle_signal;
-    sigaction(SIGTERM, &sa, nullptr);
-    sigaction(SIGINT, &sa, nullptr);
-
-    std::vector<std::unique_ptr<Port>> portList;
-    std::vector<pollfd> ports;
-    for (int i = 0; i < argc - 1; ++i) {
-        std::string intf_name = argv[1 + i];
-        portList.push_back(std::make_unique<Port>(intf_name));
-        if (!portList.back()->is_valid()) {
-            std::cerr << "Failed to initialize switch port " << intf_name << std::endl;
-            return 1;
-        }
-        pollfd pfd{};
-        pfd.fd = portList.back()->get_fd();
-        pfd.events = POLLIN;
-        ports.push_back(pfd);
-    }
-    MacTable mac_table;
-
+void processPackets(std::vector<std::unique_ptr<Port>> &portList, std::vector<pollfd> &ports){
     uint8_t* buffer;
     uint8_t ingress_port;
     size_t next_port = 0;
@@ -120,4 +90,42 @@ int main(int argc, char** argv) {
             portList[egress_port]->send(buffer, pkt_len);
         }
     } 
+}
+
+int main(int argc, char** argv) {
+    std::cout << "Switch main() starting" << std::endl;
+    if (argc < 2) {
+        std::cerr << "Usage: " << argv[0] << " <interface> [interface ...]"
+                  << std::endl;
+        return 2;
+    }
+
+    struct sigaction sa;
+    std::memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = handle_signal;
+    sigaction(SIGTERM, &sa, nullptr);
+    sigaction(SIGINT, &sa, nullptr);
+
+    std::vector<std::unique_ptr<Port>> portList;
+    std::vector<pollfd> ports;
+    for (int i = 0; i < argc - 1; ++i) {
+        std::string intf_name = argv[1 + i];
+        portList.push_back(std::make_unique<Port>(intf_name));
+        if (!portList.back()->is_valid()) {
+            std::cerr << "Failed to initialize switch port " << intf_name << std::endl;
+            return 1;
+        }
+        pollfd pfd{};
+        pfd.fd = portList.back()->get_fd();
+        pfd.events = POLLIN;
+        ports.push_back(pfd);
+    }
+
+    std::thread t1(processPackets, portList, ports);
+    std::thread t2(processPackets, portList, ports);
+    t1.join();
+    t2.join();
+    return 0;
+
+    
 }

@@ -16,7 +16,6 @@ ringBuffer::ringBuffer(std::string file_name = "logs/switch_log"){
 bool ringBuffer::addEntry(std::string log){
     if(tail + log.size() > BUFFER_LEN){
         //writing would overwrite other data
-        //figure out a way to resolve this for now return after clearing
         writeEntries();
     }
     memcpy(buffer + tail, log.c_str(), log.size());
