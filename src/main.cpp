@@ -7,8 +7,9 @@
 #include <poll.h>
 #include <vector>
 #include <memory>
+#include <functional>
 #include <csignal>
- #include <thread>
+#include <thread>
 volatile sig_atomic_t continue_running = 1;
 MacTable mac_table;
 void handle_signal(int signal_num){
@@ -18,17 +19,19 @@ void handle_signal(int signal_num){
     return;
 }
 
-void pollPort(std::vector<std::unique_ptr<Port>>& portList, std::vector<pollfd>& ports, uint8_t*& buffer, size_t buffer_size, uint8_t& ingress, ssize_t& pkt_len, size_t& next_port){
+void pollPorts(std::vector<std::unique_ptr<Port>>& portList, std::vector<pollfd>& ports, uint8_t*& buffer, size_t buffer_size, uint8_t& ingress, ssize_t& pkt_len, size_t& next_port){
+    //UNUSED
     //fills buffer with the next packet to be processed. Assigns ingress
     //to the incoming interface.
     for (size_t checked = 0; checked < portList.size(); ++checked) {
         size_t i = (next_port + checked) % portList.size();
-        if (portList[i]->has_pending_packet()) {
+        if (portList[i]->mtx.try_lock() && portList[i]->has_pending_packet()) {
             ingress = i;
             next_port = (i + 1) % portList.size();
             pkt_len = portList[i]->get(buffer, buffer_size);
             return;
         }
+        portList[i]->mtx.unlock();
     }
 
     int result = poll(ports.data(), ports.size(), 1000);
@@ -44,29 +47,39 @@ void pollPort(std::vector<std::unique_ptr<Port>>& portList, std::vector<pollfd>&
 
     for (size_t checked = 0; checked < ports.size(); ++checked) {
         size_t i = (next_port + checked) % ports.size();
-        if (ports[i].revents & POLLIN) {
+        if (portList[i]->mtx.try_lock() && ports[i].revents & POLLIN) {
             ingress = i;
             next_port = (i + 1) % ports.size();
             pkt_len = portList[i]->get(buffer, buffer_size);
             return;
         }
+        portList[i]->mtx.unlock();
     }
+    
 }
 
-void processPackets(std::vector<std::unique_ptr<Port>> &portList, std::vector<pollfd> &ports){
+void pollPort(std::unique_ptr<Port>& port, int port_idx, uint8_t*& buffer, size_t buffer_size, uint8_t& ingress, size_t& pkt_len){
+    //returns a filled buffer and ingress index if a pkt exists on the port
+    if (port->has_pending_packet()){
+        ingress = port_idx;
+        pkt_len = port->get(buffer, buffer_size);
+        return;
+    }
+
+}
+void processPackets(std::vector<std::unique_ptr<Port>>& portList, pollfd& port_fd, int port_idx){
     uint8_t* buffer;
     uint8_t ingress_port;
     size_t next_port = 0;
-    ssize_t pkt_len = 0; 
+    size_t pkt_len = 0; 
     uint8_t packet_pool[65536];
 
     while (continue_running) { //fc
         buffer = packet_pool;
         pkt_len = 0;
 
-        pollPort(portList, ports, buffer, sizeof(packet_pool),
-                 ingress_port, pkt_len, next_port);
-
+        pollPort(portList[port_idx], port_idx, buffer, sizeof(packet_pool), ingress_port, pkt_len);
+        
         if (pkt_len <= 0) continue; 
         if (pkt_len < static_cast<ssize_t>(sizeof(EthernetHeader))) {
             std::cerr << "Dropped undersized Ethernet frame ("
@@ -121,10 +134,14 @@ int main(int argc, char** argv) {
         ports.push_back(pfd);
     }
 
-    std::thread t1(processPackets, portList, ports);
-    std::thread t2(processPackets, portList, ports);
+    std::thread t0(processPackets, std::ref(portList), std::ref(ports[0]), 0);
+    std::thread t1(processPackets, std::ref(portList), std::ref(ports[1]), 1);
+    std::thread t2(processPackets, std::ref(portList), std::ref(ports[2]), 2);
+    std::thread t3(processPackets, std::ref(portList), std::ref(ports[3]), 3);
+    t0.join();
     t1.join();
     t2.join();
+    t3.join();
     return 0;
 
     

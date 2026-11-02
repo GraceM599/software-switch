@@ -14,8 +14,10 @@
 #include <unistd.h>
 #include "ring_buffer.h"
 
+#include <mutex> 
 class Port {
 public:
+    std::mutex mtx;
     Port(std::string interface_name);
 
     ssize_t get(uint8_t* out_buffer, size_t buffer_size);
@@ -33,6 +35,7 @@ public:
 private:
     std::string interface;
     int fd;
+    
     int tx_fd;
     void* rx_ring;
     void* tx_ring;
@@ -52,6 +55,7 @@ private:
     void release_rx_block(tpacket_block_desc* block, size_t block_idx);
 
     void release();
+    //TODO: Vector of semaphores to ensure 1 thread per block at a time.
 };
 
 #endif
