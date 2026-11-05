@@ -13,13 +13,14 @@
 #include <thread>
 volatile sig_atomic_t continue_running = 1;
 MacTable mac_table;
-Monitor monitor("swm0");
+Monitor monitor("swm0", AcceptedFrames::All, 1);
 void handle_signal(int signal_num){
     if (signal_num == SIGTERM || signal_num == SIGINT){
         continue_running = 0;
     }
     return;
 }
+
 
 void pollPorts(std::vector<std::unique_ptr<Port>>& portList, std::vector<pollfd>& ports, uint8_t*& buffer, size_t buffer_size, uint8_t& ingress, ssize_t& pkt_len, size_t& next_port){
     //UNUSED
