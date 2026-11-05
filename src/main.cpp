@@ -4,6 +4,7 @@
 #include "packet_struct.h"
 #include "switch_port.h"
 #include "macTable.h" 
+#include "switch_monitor.h"
 #include <poll.h>
 #include <vector>
 #include <memory>
@@ -12,6 +13,7 @@
 #include <thread>
 volatile sig_atomic_t continue_running = 1;
 MacTable mac_table;
+Monitor monitor("swm0");
 void handle_signal(int signal_num){
     if (signal_num == SIGTERM || signal_num == SIGINT){
         continue_running = 0;
@@ -97,10 +99,12 @@ void processPackets(std::vector<std::unique_ptr<Port>>& portList, pollfd& port_f
             for (int i = 0; i < portList.size(); ++i) {
                 if (ingress_port != i) {
                     portList[i]->send(buffer, pkt_len);
+                    monitor.write(buffer, pkt_len);
                 }
             }
         } else {
             portList[egress_port]->send(buffer, pkt_len);
+            monitor.write(buffer, pkt_len);
         }
     } 
 }
