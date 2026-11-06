@@ -23,6 +23,15 @@ def test_mininet():
         net.addHost("h4", ip="10.0.0.4/24"),
     ]
 
+    #for the monitor
+    #sudo ip link add swm0 type veth peer name swm1
+    #sudo ip link set dev swm0 up
+    #sudo ip link set dev swm1 up but we run with sudo so no sudo
+    
+    run("ip link add swm0 type veth peer name swm1")
+    run("ip link set dev swm0 up")
+    run("ip link set dev swm1 up")
+    
     switch_process = None
     root_ifs = []
 
@@ -107,6 +116,7 @@ def test_mininet():
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL
             )
+        run("ip link delete swm0")
 
 
 if __name__ == "__main__":

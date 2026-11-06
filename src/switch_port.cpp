@@ -1,10 +1,21 @@
 #include "switch_port.h"
 
-Port::Port(std::string interface_name)
+Port::Port(std::string interface_name, PortMode pm, std::vector<uint16_t> vlan_ids)
     : interface(interface_name), fd(-1), tx_fd(-1),
         rx_ring(MAP_FAILED), tx_ring(MAP_FAILED), ifindex(0),
         rx_ring_size(0), tx_ring_size(0), valid(false),
         logger("logs/" + interface + "log") {
+
+    mode = pm;
+    if (mode != PortMode::Trunk){
+        vlan_id = vlan_ids[0]; //if access intf vlan_ids should only pass one vlan id
+    }
+    else{
+        for (int i = 0; i < vlan_ids.size(); ++i){
+            this->allowed_vlans.insert(vlan_ids[i]);
+        }
+    }
+    
     ifindex = if_nametoindex(interface.c_str());
     if (ifindex == 0) {
         fail("Could not find interface " + interface);
@@ -98,7 +109,7 @@ Port::Port(std::string interface_name)
     std::cout << "Listening on " << interface << std::endl;
 }
 
-ssize_t Port::get(uint8_t* out_buffer, size_t buffer_size) {
+ssize_t Port::get(uint8_t* out_buffer, size_t buffer_size, uint16_t& vlan_id) {
     for (unsigned int i = 0; i < rx_req.tp_block_nr; ++i) {
         size_t block_idx = (rx_block_idx + i) % rx_req.tp_block_nr;
         size_t offset = block_idx * rx_req.tp_block_size;
@@ -133,6 +144,8 @@ ssize_t Port::get(uint8_t* out_buffer, size_t buffer_size) {
             release_rx_block(block, block_idx);
         }
 
+        classify_ingress(out_buffer, packet_length, buffer_size, vlan_id);
+    
         logger.addEntry(interface + " received packet (" + std::to_string(packet_length) + " bytes)\n");
         return packet_length;
     }
@@ -140,7 +153,10 @@ ssize_t Port::get(uint8_t* out_buffer, size_t buffer_size) {
     return 0;
 }
 
-int Port::send(uint8_t* packet, size_t length) {
+int Port::send(uint8_t* packet, size_t length, uint16_t vlan_id) {
+
+    bool tagged = (mode == PortMode::Trunk);
+    size_t output_len = length + (tagged ? 4 : 0); //put vlan tag back in
     size_t data_offset = TPACKET2_HDRLEN - sizeof(sockaddr_ll);
     if (length > tx_req.tp_frame_size - data_offset) {
         std::cerr << "Packet too large for TX ring on " << interface << " (" << length << " bytes)" << std::endl;
@@ -159,7 +175,21 @@ int Port::send(uint8_t* packet, size_t length) {
         std::atomic_thread_fence(std::memory_order_acquire);
 
         uint8_t* frame_data = reinterpret_cast<uint8_t*>(frame) + data_offset;
-        memcpy(frame_data, packet, length);
+
+        if (tagged){
+            memcpy(frame_data, packet, 12);
+            uint16_t tpid = htons(0x8100);
+            memcpy(frame_data + 12, &tpid, 2);
+
+            uint16_t tag_info = htons(vlan_id & 0x0FFF);
+            memcpy(frame_data + 14, &tag_info, 2);
+            memcpy(frame_data + 16, packet+12, length -12);
+
+        }
+        else{
+            memcpy(frame_data, packet, length);
+
+        }
         frame->tp_mac = data_offset;
         frame->tp_net = data_offset + ETH_HLEN;
         frame->tp_len = length;
@@ -208,6 +238,51 @@ Port::~Port() {
     release();
 }
 
+bool Port::classify_ingress(uint8_t* pkt, size_t& len, size_t buffer_size, uint16_t& vlan_id){
+    if (len < 14){
+        return false; //baby frame
+    }
+    uint16_t ether_type;
+    memcpy(&ether_type, pkt + 12, sizeof(ether_type));
+    ether_type = ntohs(ether_type);
+
+    if (mode == PortMode::Access){
+        if (ether_type == 0x8100){
+            return false;
+        }
+        vlan_id = this->vlan_id;
+        return true;
+    }
+    //PortMode::Trunk
+    if (ether_type != 0x8100 || len < 18){
+        return false;
+    }
+
+    uint16_t tag_info;
+    memcpy(&tag_info, pkt+14, sizeof(tag_info));
+    tag_info = ntohs(tag_info);
+
+    uint16_t recieved_vlan = tag_info & 0x0FFF;
+    if (recieved_vlan == 0 || recieved_vlan == 4095){
+        return false;
+    }
+
+    if (allowed_vlans.find(recieved_vlan) == allowed_vlans.end()){
+        return false;
+    }
+    memmove(pkt + 12, pkt + 16, len - 16);
+    len -= 4;
+    vlan_id = recieved_vlan;
+    return true;
+}
+
+bool Port::can_egress(uint16_t vlan_id) {
+    if (mode == PortMode::Access) {
+        return vlan_id == this->vlan_id;
+    }
+    return (allowed_vlans.find(vlan_id) != allowed_vlans.end());
+
+}
 
 void Port::fail(const std::string& message) {
     std::cerr << message << ": " << std::strerror(errno) << std::endl;

@@ -15,14 +15,22 @@
 #include "ring_buffer.h"
 
 #include <mutex> 
+#include <vector>
+#include <unordered_set>
+
+
+enum class PortMode {
+    Access, Trunk
+};
+
 class Port {
 public:
     std::mutex mtx;
-    Port(std::string interface_name);
+    Port(std::string interface_name, PortMode pm, std::vector<uint16_t> vlan_ids);
 
-    ssize_t get(uint8_t* out_buffer, size_t buffer_size);
+    ssize_t get(uint8_t* out_buffer, size_t buffer_size, uint16_t& vlan_id);
 
-    int send(uint8_t* packet, size_t length);
+    int send(uint8_t* packet, size_t length, uint16_t vlan_id);
 
     int get_fd() const;
 
@@ -35,6 +43,9 @@ public:
 private:
     std::string interface;
     int fd;
+    PortMode mode;
+    uint16_t vlan_id;
+    std::unordered_set<uint16_t> allowed_vlans;
     
     int tx_fd;
     void* rx_ring;
@@ -54,8 +65,9 @@ private:
 
     void release_rx_block(tpacket_block_desc* block, size_t block_idx);
 
+    bool classify_ingress(uint8_t* pkt, size_t& len, size_t buffer_size, uint16_t& vlan_id);
+    bool can_egress(uint16_t vlan_id);
     void release();
-    //TODO: Vector of semaphores to ensure 1 thread per block at a time.
 };
 
 #endif

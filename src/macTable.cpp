@@ -1,25 +1,24 @@
 #include "macTable.h"
 
-void MacTable::insert(uint8_t* addr, uint8_t interface){
-        table[convert_address(addr)] = interface;
+void MacTable::insert(uint8_t* addr, uint8_t interface, uint16_t vlan_id){
+    macKey mk{vlan_id, convert_address(addr)};
+    table[mk] = interface;
 }
 
-uint8_t MacTable::destination(uint8_t* addr){
-    if (table.count(convert_address(addr)) == 0){
+uint8_t MacTable::destination(uint8_t* addr, uint16_t vlan_id){
+    macKey mk{vlan_id, convert_address(addr)};
+    if (table.count(mk) == 0){
         return -1;
     }
-    return table[convert_address(addr)];
+    return table[mk];
 }
 
-std::unordered_map<uint64_t, uint8_t> MacTable::get_table(){
-    return table;
-}
 
 MacTable::MacTable(){
 
 }
 
-uint64_t MacTable::convert_address(uint8_t* addr){
+uint64_t convert_address(uint8_t* addr){
         //6 bytes -> 8 byte sized number
         uint64_t num = 0;
         for (int i = 0; i<6; ++i){

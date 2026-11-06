@@ -26,12 +26,13 @@ void pollPorts(std::vector<std::unique_ptr<Port>>& portList, std::vector<pollfd>
     //UNUSED
     //fills buffer with the next packet to be processed. Assigns ingress
     //to the incoming interface.
+    uint16_t vlan_id;
     for (size_t checked = 0; checked < portList.size(); ++checked) {
         size_t i = (next_port + checked) % portList.size();
         if (portList[i]->mtx.try_lock() && portList[i]->has_pending_packet()) {
             ingress = i;
             next_port = (i + 1) % portList.size();
-            pkt_len = portList[i]->get(buffer, buffer_size);
+            pkt_len = portList[i]->get(buffer, buffer_size, vlan_id);
             return;
         }
         portList[i]->mtx.unlock();
@@ -53,7 +54,7 @@ void pollPorts(std::vector<std::unique_ptr<Port>>& portList, std::vector<pollfd>
         if (portList[i]->mtx.try_lock() && ports[i].revents & POLLIN) {
             ingress = i;
             next_port = (i + 1) % ports.size();
-            pkt_len = portList[i]->get(buffer, buffer_size);
+            pkt_len = portList[i]->get(buffer, buffer_size, vlan_id);
             return;
         }
         portList[i]->mtx.unlock();
@@ -61,11 +62,11 @@ void pollPorts(std::vector<std::unique_ptr<Port>>& portList, std::vector<pollfd>
     
 }
 
-void pollPort(std::unique_ptr<Port>& port, int port_idx, uint8_t*& buffer, size_t buffer_size, uint8_t& ingress, size_t& pkt_len){
+void pollPort(std::unique_ptr<Port>& port, int port_idx, uint8_t*& buffer, size_t buffer_size, uint8_t& ingress, size_t& pkt_len, uint16_t& vlan_id){
     //returns a filled buffer and ingress index if a pkt exists on the port
     if (port->has_pending_packet()){
         ingress = port_idx;
-        pkt_len = port->get(buffer, buffer_size);
+        pkt_len = port->get(buffer, buffer_size, vlan_id);
         return;
     }
 
@@ -76,12 +77,13 @@ void processPackets(std::vector<std::unique_ptr<Port>>& portList, pollfd& port_f
     size_t next_port = 0;
     size_t pkt_len = 0; 
     uint8_t packet_pool[65536];
+    uint16_t vlan_id = 0;
 
     while (continue_running) { //fc
         buffer = packet_pool;
         pkt_len = 0;
 
-        pollPort(portList[port_idx], port_idx, buffer, sizeof(packet_pool), ingress_port, pkt_len);
+        pollPort(portList[port_idx], port_idx, buffer, sizeof(packet_pool), ingress_port, pkt_len, vlan_id);
         
         if (pkt_len <= 0) continue; 
         if (pkt_len < static_cast<ssize_t>(sizeof(EthernetHeader))) {
@@ -91,20 +93,20 @@ void processPackets(std::vector<std::unique_ptr<Port>>& portList, pollfd& port_f
         }
 
         EthernetHeader* frame = reinterpret_cast<EthernetHeader*>(buffer);
-        mac_table.insert(frame->src_mac, ingress_port);
-        uint8_t egress_port = mac_table.destination(frame->dest_mac);
+        mac_table.insert(frame->src_mac, ingress_port, vlan_id);
+        uint8_t egress_port = mac_table.destination(frame->dest_mac, vlan_id);
 
         uint8_t broadcast[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
         if (memcmp(frame->dest_mac, broadcast, 6) == 0 || egress_port == 255) { 
             for (int i = 0; i < portList.size(); ++i) {
                 if (ingress_port != i) {
-                    portList[i]->send(buffer, pkt_len);
+                    portList[i]->send(buffer, pkt_len, vlan_id);
                     monitor.write(buffer, pkt_len);
                 }
             }
         } else {
-            portList[egress_port]->send(buffer, pkt_len);
+            portList[egress_port]->send(buffer, pkt_len, vlan_id);
             monitor.write(buffer, pkt_len);
         }
     } 
@@ -126,9 +128,18 @@ int main(int argc, char** argv) {
 
     std::vector<std::unique_ptr<Port>> portList;
     std::vector<pollfd> ports;
+    PortMode pm = PortMode::Trunk;
+    std::vector<uint16_t> vlans = {1};
     for (int i = 0; i < argc - 1; ++i) {
+        if (i == 1){
+            vlans = {2};
+        }
+        if (i >= 2){
+            pm = PortMode::Access;
+            vlans.push_back(1);
+        }
         std::string intf_name = argv[1 + i];
-        portList.push_back(std::make_unique<Port>(intf_name));
+        portList.push_back(std::make_unique<Port>(intf_name, pm, vlans));
         if (!portList.back()->is_valid()) {
             std::cerr << "Failed to initialize switch port " << intf_name << std::endl;
             return 1;
