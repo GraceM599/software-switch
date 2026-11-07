@@ -2,6 +2,7 @@ from mininet.net import Mininet
 from mininet.link import Intf
 from mininet.cli import CLI
 from mininet.log import setLogLevel
+import argparse
 import subprocess
 import os
 import time
@@ -12,16 +13,19 @@ def run(cmd):
     print("$ {}".format(cmd))
     subprocess.run(cmd, shell=True, check=True)
 
+def parse_config(filename):
+    config = []
+    config_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config")
+    with open(os.path.join(config_dir, filename)) as file:
+        for line in file:
+            config.append(line.split())
+    return config
 
-def test_mininet():
+
+def test_mininet(config, filename):
     net = Mininet()
 
-    hosts = [
-        net.addHost("h1", ip="10.0.0.1/24"),
-        net.addHost("h2", ip="10.0.0.2/24"),
-        net.addHost("h3", ip="10.0.0.3/24"),
-        net.addHost("h4", ip="10.0.0.4/24"),
-    ]
+    hosts = [net.addHost(name, ip=ip) for name, mode, vlan, ip in config]
 
     #for the monitor
     #sudo ip link add swm0 type veth peer name swm1
@@ -39,6 +43,7 @@ def test_mininet():
         net.start()
 
         for i, host in enumerate(hosts):
+            name, mode, vlan, ip = config[i]
             host_if = "{}-eth0".format(host.name)
             root_if = "sw{}".format(i)
 
@@ -57,6 +62,7 @@ def test_mininet():
             Intf(
                 host_if,
                 node=host,
+                port=1 if mode == "trunk" else 0,
                 moveIntfFn=lambda name, node: None
             )
 
@@ -73,17 +79,24 @@ def test_mininet():
             host.cmd(
                 "ip addr flush dev {}".format(host_if)
             )
-            host.setIP(
-                "10.0.0.{}/24".format(i + 1),
-                intf=host_if
-            )
+            ip_if = host_if
+            if mode == "trunk":
+                ip_if = "{}.{}".format(host_if, vlan)
+                out, err, status = host.pexec(
+                    "ip", "link", "add", "link", host_if, "name", ip_if,
+                    "type", "vlan", "id", vlan
+                )
+                if status:
+                    raise RuntimeError("Could not create {}: {}".format(ip_if, err.strip()))
+                Intf(ip_if, node=host, port=0, moveIntfFn=lambda name, node: None)
+            host.setIP(ip, intf=ip_if)
 
             # Bring up the root end so the switch can use it.
             run("ip link set {} up".format(root_if))
 
         print("Launching userspace switch...")
         switch_process = subprocess.Popen(
-            ["./build/switch"] + root_ifs,
+            ["./build/switch", filename] + root_ifs,
             start_new_session=True
         )
 
@@ -120,5 +133,10 @@ def test_mininet():
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("config", help="config filename in config/")
+    args = parser.parse_args()
+    config = parse_config(args.config)
     setLogLevel("info")
-    test_mininet()
+    config_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config")
+    test_mininet(config, os.path.join(config_dir, args.config))

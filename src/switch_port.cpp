@@ -137,6 +137,10 @@ ssize_t Port::get(uint8_t* out_buffer, size_t buffer_size, uint16_t& vlan_id) {
         }
 
         memcpy(out_buffer, reinterpret_cast<uint8_t*>(packet) + packet->tp_mac, packet_length);
+        bool vlan_valid = packet->tp_status & TP_STATUS_VLAN_VALID;
+        uint16_t vlan_tci = packet->hv1.tp_vlan_tci;
+        uint16_t vlan_tpid = (packet->tp_status & TP_STATUS_VLAN_TPID_VALID)
+            ? packet->hv1.tp_vlan_tpid : 0x8100;
 
         if (packet->tp_next_offset != 0) {
             rx_offset_next_pkt += packet->tp_next_offset;
@@ -144,8 +148,24 @@ ssize_t Port::get(uint8_t* out_buffer, size_t buffer_size, uint16_t& vlan_id) {
             release_rx_block(block, block_idx);
         }
 
-        classify_ingress(out_buffer, packet_length, buffer_size, vlan_id);
-    
+        if (vlan_valid) {
+            if (packet_length < 14 || buffer_size - packet_length < 4) {
+                logger.addEntry("Dropped invalid frame on " + interface + "\n");
+                return 0;
+            }
+            memmove(out_buffer + 16, out_buffer + 12, packet_length - 12);
+            vlan_tpid = htons(vlan_tpid);
+            vlan_tci = htons(vlan_tci);
+            memcpy(out_buffer + 12, &vlan_tpid, 2);
+            memcpy(out_buffer + 14, &vlan_tci, 2);
+            packet_length += 4;
+        }
+
+        bool valid = classify_ingress(out_buffer, packet_length, buffer_size, vlan_id);
+        if (!valid){
+            logger.addEntry("Dropped invalid frame on " + interface + "\n");
+            return 0;
+        }
         logger.addEntry(interface + " received packet (" + std::to_string(packet_length) + " bytes)\n");
         return packet_length;
     }
@@ -155,11 +175,15 @@ ssize_t Port::get(uint8_t* out_buffer, size_t buffer_size, uint16_t& vlan_id) {
 
 int Port::send(uint8_t* packet, size_t length, uint16_t vlan_id) {
 
+    if (!can_egress(vlan_id)) {
+        return 1;
+    }
+
     bool tagged = (mode == PortMode::Trunk);
     size_t output_len = length + (tagged ? 4 : 0); //put vlan tag back in
     size_t data_offset = TPACKET2_HDRLEN - sizeof(sockaddr_ll);
-    if (length > tx_req.tp_frame_size - data_offset) {
-        std::cerr << "Packet too large for TX ring on " << interface << " (" << length << " bytes)" << std::endl;
+    if (output_len < length || output_len > tx_req.tp_frame_size - data_offset) {
+        std::cerr << "Packet too large for TX ring on " << interface << " (" << output_len << " bytes)" << std::endl;
         return -1;
     }
 
@@ -192,8 +216,8 @@ int Port::send(uint8_t* packet, size_t length, uint16_t vlan_id) {
         }
         frame->tp_mac = data_offset;
         frame->tp_net = data_offset + ETH_HLEN;
-        frame->tp_len = length;
-        frame->tp_snaplen = length;
+        frame->tp_len = output_len;
+        frame->tp_snaplen = output_len;
         std::atomic_thread_fence(std::memory_order_release);
         frame->tp_status = TP_STATUS_SEND_REQUEST;
         tx_frame_idx = (frame_idx + 1) % tx_req.tp_frame_nr;
