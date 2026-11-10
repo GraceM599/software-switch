@@ -103,18 +103,17 @@ class TestSwitch:
             if switch_process.poll() is not None:
                 raise RuntimeError("Switch exited early")
 
-            # Learn both host MACs by having them communicate
+            #Learn both host MACs
             result_ping = hosts[0].cmd("ping -c 1 {}".format(hosts[1].IP()))
             time.sleep(0.5)
             result_ping2 = hosts[1].cmd("ping -c 1 {}".format(hosts[0].IP()))
             time.sleep(1.0)
             
-            # Get MAC addresses for filtering
+            #Get MAC addresses
             h0_mac = hosts[0].MAC()
             h1_mac = hosts[1].MAC()
             
-            # Now test: send unicast from h0 to h1
-            # If MAC learning works, it should only go to sw1, not sw2
+            #If MAC learning works, it should only go to sw1, not sw2
             sniffer1 = AsyncSniffer(iface=root_ifs[1], count=0, timeout=2.0)
             sniffer2 = AsyncSniffer(iface=root_ifs[2], count=0, timeout=2.0)
             sniffer1.start()
@@ -127,19 +126,12 @@ class TestSwitch:
             sniffer1.join()
             sniffer2.join()
             
-            # Filter for ONLY the test packet we just sent (src=h0, dst=h1)
             test_on_sw1 = [pkt for pkt in sniffer1.results 
                           if Ether in pkt and pkt[Ether].src == h0_mac and pkt[Ether].dst == h1_mac]
             test_on_sw2 = [pkt for pkt in sniffer2.results 
                           if Ether in pkt and pkt[Ether].src == h0_mac and pkt[Ether].dst == h1_mac]
             
-            # Print debug info
-            print(f"\nDEBUG: Test packet h0({h0_mac}) -> h1({h1_mac})")
-            print(f"DEBUG: sw1 saw our test packet: {len(test_on_sw1)} times")
-            print(f"DEBUG: sw2 saw our test packet: {len(test_on_sw2)} times (should be 0 if MAC learning works)")
-            print(f"DEBUG: sw1 total packets: {len(sniffer1.results)}, sw2 total packets: {len(sniffer2.results)}")
-            
-            # Verify MAC learning prevented flooding of our test packet to sw2
+            #MAC learning prevented flooding of our test packet to sw2
             assert len(test_on_sw2) == 0, f"Test packet should NOT flood to sw2, but was seen {len(test_on_sw2)} times"
 
         finally:
