@@ -20,12 +20,16 @@ def add_host(line, host):
     host_if = f"{host.name}-eth0"
     root_if = f"sw{line}"
     
-    #veth pair to connect the host and root namespace
+    # Clean up any existing interfaces first
+    subprocess.run(["ip", "link", "del", root_if], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run(["ip", "link", "del", host_if], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    
+    # veth pair to connect the host and root namespace
     subprocess.run(["ip", "link", "add", root_if, "type", "veth", "peer", "name", host_if], check=True)
-    #Move host if into host namespace
+    # Move host if into host namespace
     subprocess.run(["ip", "link", "set", host_if, "netns", str(host.pid)], check=True)
     
-    #disable TX checksum offload
+    # disable TX checksum offload
     host.cmd(f"ethtool -K {host_if} tx off")
     host.cmd(f"ip addr flush dev {host_if}")
         
