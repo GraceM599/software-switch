@@ -7,7 +7,7 @@ import subprocess
 import os
 import time
 import signal
-from utils.py import *
+from utils import *
 
 
 def run(cmd):
@@ -17,7 +17,6 @@ def run(cmd):
 def setup_config(hosts, vlan_config):
     #run allt he setup commands needed
     pass
-
 
 def test_mininet(config, filename):
     net = Mininet()
@@ -33,8 +32,13 @@ def test_mininet(config, filename):
         for i, host in enumerate(hosts):
             name, mode, vlan, ip = config[i]
             
-            host_if = add_host(i, host)
             
+            host_if, root_if = add_host(i, host)
+            root_ifs.append(root_if)
+            
+            #Register intf with Mininet
+            Intf(host_if, node=host, port=1 if mode == "trunk" else 0, 
+                moveIntfFn=lambda name, node: None)
             ip_if = host_if
             if mode == "trunk":
                 ip_if = "{}.{}".format(host_if, vlan)
@@ -47,8 +51,8 @@ def test_mininet(config, filename):
                 Intf(ip_if, node=host, port=0, moveIntfFn=lambda name, node: None)
             host.setIP(ip, intf=ip_if)
 
-            # Bring up the root end so the switch can use it.
-            run("ip link set {} up".format(root_if))
+            #Bring up the root end so the switch can use it.
+            subprocess.run(["ip", "link", "set", root_if, "up"], check=True)
 
         print("Launching userspace switch...")
         switch_process = subprocess.Popen(
@@ -68,13 +72,7 @@ def test_mininet(config, filename):
         CLI(net)
 
     finally:
-        if switch_process is not None:
-            switch_process.terminate()
-            try:
-                switch_process.wait(timeout=2)
-            except subprocess.TimeoutExpired:
-                switch_process.kill()
-                switch_process.wait()
+        kill_switch(switch_process)
 
         net.stop()
 
@@ -85,15 +83,6 @@ def test_mininet(config, filename):
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL
             )
-        run("ip link delete swm0")
 
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("config", help="config filename in config/")
-    args = parser.parse_args()
-    config = parse_configfile(args.config)
-    setLogLevel("info")
-    config_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config")
-    test_mininet(config, os.path.join(config_dir, args.config))
