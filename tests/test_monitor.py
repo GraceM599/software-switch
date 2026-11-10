@@ -45,19 +45,17 @@ def test_monitor():
         if switch_process.poll() is not None:
             raise RuntimeError("Switch exited early")
         
-        # Start sniffing on monitor interface (swm0)
         sniffer = AsyncSniffer(iface="swm0", count=0, timeout=2.0)
         sniffer.start()
         time.sleep(0.3)
         
-        # Send a packet from host0 to host1 through the switch
+        #Send packet from host0 to host1 through switch
         test_packet = Ether(src=hosts[0].MAC(), dst=hosts[1].MAC()) / IP(src=hosts[0].IP(), dst=hosts[1].IP())
         sendp(test_packet, iface=root_ifs[0], verbose=False)
         
         sniffer.join()
         captured_frames = sniffer.results
         
-        # Monitor should capture the packet
         assert len(captured_frames) > 0, "Monitor interface did not capture any packets"
         
     finally:
