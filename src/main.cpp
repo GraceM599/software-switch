@@ -14,7 +14,9 @@
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
-volatile sig_atomic_t continue_running = 1;
+#include "dp.h"
+
+std::atomic<bool> continue_running{true};
 MacTable mac_table;
 Monitor monitor("swm0", AcceptedFrames::All, 1);
 void handle_signal(int signal_num){
@@ -55,99 +57,6 @@ std::vector<PortConfig> parseConfig(const std::string& filename){
     return config;
 }
 
-void pollPorts(std::vector<std::unique_ptr<Port>>& portList, std::vector<pollfd>& ports, uint8_t*& buffer, size_t buffer_size, uint8_t& ingress, ssize_t& pkt_len, size_t& next_port){
-    //UNUSED
-    //fills buffer with the next packet to be processed. Assigns ingress
-    //to the incoming interface.
-    uint16_t vlan_id;
-    for (size_t checked = 0; checked < portList.size(); ++checked) {
-        size_t i = (next_port + checked) % portList.size();
-        if (portList[i]->mtx.try_lock() && portList[i]->has_pending_packet()) {
-            ingress = i;
-            next_port = (i + 1) % portList.size();
-            pkt_len = portList[i]->get(buffer, buffer_size, vlan_id);
-            
-            return;
-        }
-        portList[i]->mtx.unlock();
-    }
-
-    int result = poll(ports.data(), ports.size(), 1000);
-    if (result < 0) {
-        if (errno != EINTR) {
-            std::cerr << "poll failed: " << std::strerror(errno) << std::endl;
-        }
-        return;
-    }
-    if (result == 0) {
-        return;
-    }
-
-    for (size_t checked = 0; checked < ports.size(); ++checked) {
-        size_t i = (next_port + checked) % ports.size();
-        if (portList[i]->mtx.try_lock() && ports[i].revents & POLLIN) {
-            ingress = i;
-            next_port = (i + 1) % ports.size();
-            pkt_len = portList[i]->get(buffer, buffer_size, vlan_id);
-            return;
-        }
-        portList[i]->mtx.unlock();
-    }
-    
-}
-
-void pollPort(std::unique_ptr<Port>& port, int port_idx, uint8_t*& buffer, size_t buffer_size, uint8_t& ingress, size_t& pkt_len, uint16_t& vlan_id){
-    //returns a filled buffer and ingress index if a pkt exists on the port
-    if (port->has_pending_packet()){
-        ingress = port_idx;
-        pkt_len = port->get(buffer, buffer_size, vlan_id);
-        return;
-    }
-
-}
-void processPackets(std::vector<std::unique_ptr<Port>>& portList, pollfd& port_fd, int port_idx){
-    uint8_t* buffer;
-    uint8_t ingress_port;
-    size_t next_port = 0;
-    size_t pkt_len = 0; 
-    uint8_t packet_pool[65536];
-    uint16_t vlan_id = 0;
-
-    while (continue_running) { //fc
-        buffer = packet_pool;
-        pkt_len = 0;
-
-        pollPort(portList[port_idx], port_idx, buffer, sizeof(packet_pool), ingress_port, pkt_len, vlan_id);
-        
-        if (pkt_len <= 0) continue; 
-        if (pkt_len < static_cast<ssize_t>(sizeof(EthernetHeader))) {
-            std::cerr << "Dropped undersized Ethernet frame ("
-                      << pkt_len << " bytes)" << std::endl;
-            continue;
-        }
-
-        EthernetHeader* frame = reinterpret_cast<EthernetHeader*>(buffer);
-        mac_table.insert(frame->src_mac, ingress_port, vlan_id);
-        uint8_t egress_port = mac_table.destination(frame->dest_mac, vlan_id);
-
-        uint8_t broadcast[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-
-        if (memcmp(frame->dest_mac, broadcast, 6) == 0 || egress_port == 255) { 
-            for (int i = 0; i < portList.size(); ++i) {
-                if (ingress_port != i) {
-                    if (portList[i]->send(buffer, pkt_len, vlan_id) == 0) {
-                        monitor.write(buffer, pkt_len);
-                    }
-                }
-            }
-        } else {
-            if (portList[egress_port]->send(buffer, pkt_len, vlan_id) == 0) {
-                monitor.write(buffer, pkt_len);
-            }
-        }
-    } 
-}
-
 int main(int argc, char** argv) {
     std::cout << "Switch main() starting" << std::endl;
 
@@ -180,7 +89,8 @@ int main(int argc, char** argv) {
 
     std::vector<std::thread> threads;
     for (size_t i = 0; i < portList.size(); ++i) {
-        threads.emplace_back(processPackets, std::ref(portList), std::ref(ports[i]), i);
+        threads.emplace_back(processPackets, std::ref(portList), std::ref(ports[i]), i, 
+        std::ref(mac_table), std::ref(continue_running), std::ref(monitor));
     }
     for (auto& thread : threads) {
         thread.join();
