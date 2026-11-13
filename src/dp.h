@@ -28,7 +28,7 @@ inline void pollPort(std::unique_ptr<Port>& port, int port_idx, uint8_t*& buffer
 
 }
 inline void processPackets(std::vector<std::unique_ptr<Port>>& portList, pollfd& port_fd, int port_idx, 
-    MacTable& mac_table, std::atomic<bool>& continue_running, Monitor& monitor){
+    MacTable& mac_table, std::atomic<bool>* continue_running, Monitor& monitor){
     uint8_t* buffer;
     uint8_t ingress_port;
     size_t next_port = 0;
@@ -36,7 +36,7 @@ inline void processPackets(std::vector<std::unique_ptr<Port>>& portList, pollfd&
     uint8_t packet_pool[65536];
     uint16_t vlan_id = 0;
 
-    while (continue_running) { //fc
+    while (*continue_running) { //fc
         buffer = packet_pool;
         pkt_len = 0;
 
