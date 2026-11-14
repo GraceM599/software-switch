@@ -18,6 +18,8 @@
 #include <stdexcept>
 #include "dp.h"
 
+using PacketProcessor = void (*)(std::vector<std::unique_ptr<Port>>&, 
+    pollfd&, int, MacTable&, std::atomic<bool>*, Monitor&);
 
 
 
@@ -55,7 +57,8 @@ inline std::vector<PortConfig> parseConfig(const std::string& filename){
 
 class Switch{
 public:
-Switch(std::string filename, std::atomic<bool>& continue_running, char**& argv){
+Switch(std::string filename, std::atomic<bool>& continue_running, 
+    char**& argv, PacketProcessor dp){
     //basically to make a switch all that it needs is a config filename and it will set everything else up
     //makes it easy to make multipel switches
     this->continue_running = &continue_running;
@@ -78,10 +81,11 @@ Switch(std::string filename, std::atomic<bool>& continue_running, char**& argv){
         pfd.events = POLLIN;
         ports.push_back(pfd);
     }
+    this->dp = dp;
 
     std::vector<std::thread> threads;
     for (size_t i = 0; i < portList.size(); ++i) {
-        threads.emplace_back(processPackets, std::ref(portList), std::ref(ports[i]), i, 
+        threads.emplace_back(dp, std::ref(portList), std::ref(ports[i]), i, 
         std::ref(mac_table), this->continue_running, std::ref(monitor));
     } //prob should change continue_running to a shared pointer
     for (auto& thread : threads) {
@@ -124,7 +128,7 @@ std::string show_vlans(){
         }
     }
     for (std::string intf : trunk_interfaces){
-        for (auto it = vlan_interface_map.begin(); it != vlan_interface_map.end(); ++i){
+        for (auto it = vlan_interface_map.begin(); it != vlan_interface_map.end(); ++it){
             it->second.push_back(intf);
         }
     }
@@ -151,7 +155,7 @@ MacTable mac_table;
 Monitor monitor{"swm0", AcceptedFrames::All, 1};
 std::vector<pollfd> ports;
 std::atomic<bool>* continue_running;
-
+PacketProcessor dp;
 
 };
 //config

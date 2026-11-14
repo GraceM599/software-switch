@@ -22,7 +22,7 @@ inline void puntPacket(){
     //buffers already on ports could probably serve that purpose
     
 }
-inline void pollPort(std::unique_ptr<Port>& port, int port_idx, uint8_t*& buffer, size_t buffer_size, uint8_t& ingress, size_t& pkt_len, uint16_t& vlan_id){
+inline void pollPort(std::unique_ptr<Port>& port, int port_idx, uint8_t*& buffer, size_t buffer_size, uint8_t& ingress, ssize_t& pkt_len, uint16_t& vlan_id){
     //returns a filled buffer and ingress index if a pkt exists on the port
     if (port->has_pending_packet()){
         ingress = port_idx;
@@ -36,7 +36,7 @@ inline void processPackets(std::vector<std::unique_ptr<Port>>& portList, pollfd&
     uint8_t* buffer;
     uint8_t ingress_port;
     size_t next_port = 0;
-    size_t pkt_len = 0; 
+    ssize_t pkt_len = 0; 
     uint8_t packet_pool[65536];
     uint16_t vlan_id = 0;
 
