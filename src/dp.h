@@ -17,7 +17,11 @@
 #include <stdexcept>
 
 
-
+inline void puntPacket(){
+    //need a queue prob for sending to switch and for recieving from switch though
+    //buffers already on ports could probably serve that purpose
+    
+}
 inline void pollPort(std::unique_ptr<Port>& port, int port_idx, uint8_t*& buffer, size_t buffer_size, uint8_t& ingress, size_t& pkt_len, uint16_t& vlan_id){
     //returns a filled buffer and ingress index if a pkt exists on the port
     if (port->has_pending_packet()){

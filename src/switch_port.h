@@ -38,6 +38,18 @@ public:
 
     bool is_valid() const;
 
+    inline std::string getInterface(){
+        return interface;
+    }
+    inline int getFd(){
+        return fd;
+    }
+    inline uint16_t get_vlan_id(){
+        return vlan_id;
+    }
+    inline PortMode get_mode(){
+        return mode;
+    }
     ~Port();
 
 private:

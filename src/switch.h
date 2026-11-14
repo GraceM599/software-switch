@@ -13,6 +13,7 @@
 #include <csignal>
 #include <thread>
 #include <fstream>
+#include <map>
 #include <sstream>
 #include <stdexcept>
 #include "dp.h"
@@ -95,8 +96,53 @@ inline void stop(){
     *continue_running = 0;
 }
 
-void show_ports();
-void show_vlans();
+std::vector<std::string> show_ports(){
+    std::vector<std::string> p;
+    for (int i = 0; i< portList.size(); ++i){
+        p.push_back(portList[i]->getInterface());
+    }
+    return p;
+}
+
+std::string show_vlans(){
+    std::map<uint16_t, std::vector<std::string>> vlan_interface_map = {}; 
+    std::vector<std::string> trunk_interfaces = {};
+    for (int i = 0; i<portList.size(); ++i){
+        if (portList[i]->get_mode() == PortMode::Trunk){
+            trunk_interfaces.push_back(portList[i]->getInterface());
+        }
+        else{
+            std::unique_ptr<Port>& p = portList[i];
+            if (vlan_interface_map.find(p->get_vlan_id()) == vlan_interface_map.end()){
+                //vlan id has no entries yet
+                vlan_interface_map.insert({p->get_vlan_id(), {p->getInterface()}});
+            }
+            else{
+                //add interface onto existing vector
+                vlan_interface_map.at(p->get_vlan_id()).push_back(p->getInterface());
+            }
+        }
+    }
+    for (std::string intf : trunk_interfaces){
+        for (auto it = vlan_interface_map.begin(); it != vlan_interface_map.end(); ++i){
+            it->second.push_back(intf);
+        }
+    }
+
+    //format output
+    std::string output = "";
+    for (std::pair<uint16_t, std::vector<std::string>> vlan_pair : vlan_interface_map){
+        output += vlan_pair.first;
+        output += ": ";
+        for (std::string intf : vlan_pair.second){
+            output += intf + ", ";
+        }
+        output += '\n';
+    }
+    return output;
+
+
+}
 
 
 private:
