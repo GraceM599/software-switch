@@ -17,10 +17,10 @@
 #include <sstream>
 #include <stdexcept>
 #include "dp.h"
-
+#include "packet_struct.h"
+#include "ring_buffer.h"
 using PacketProcessor = void (*)(std::vector<std::unique_ptr<Port>>&, 
-    pollfd&, int, MacTable&, std::atomic<bool>*, Monitor&);
-
+    pollfd&, int, MacTable&, std::atomic<bool>*, Monitor&, ringBuffer<PacketInfo, 256>& rb);
 
 
 struct PortConfig {
@@ -66,6 +66,7 @@ Switch(std::string filename, std::atomic<bool>& continue_running,
 
     std::vector<PortConfig> config;
     config = parseConfig(filename);
+    ringBuffer<PacketInfo, 256> rb;
 
     std::vector<pollfd> ports;
     for (size_t i = 0; i < config.size(); ++i) {
@@ -86,7 +87,7 @@ Switch(std::string filename, std::atomic<bool>& continue_running,
     std::vector<std::thread> threads;
     for (size_t i = 0; i < portList.size(); ++i) {
         threads.emplace_back(dp, std::ref(portList), std::ref(ports[i]), i, 
-        std::ref(mac_table), this->continue_running, std::ref(monitor));
+        std::ref(mac_table), this->continue_running, std::ref(monitor), std::ref(rb));
     } //prob should change continue_running to a shared pointer
 
     //pipe to the dp?

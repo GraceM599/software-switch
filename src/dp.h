@@ -17,9 +17,13 @@
 #include <stdexcept>
 
 
-inline void puntPacket(uint8_t* buffer, ssize_t pkt_len, uint8_t ingress_port){
+inline void puntPacket(uint8_t* buffer, ssize_t pkt_len, uint8_t ingress_port, ringBuffer<PacketInfo, 256>& rb){
     //need a queue prob for sending to switch and for recieving from switch though
     //buffers already on ports could probably serve that purpose
+    PacketInfo pkt;
+    std::memcpy(pkt.data.data(), buffer, pkt_len); //uhh 
+    pkt.ingress_port = ingress_port;
+    rb.push(pkt);
     
 }
 inline void pollPort(std::unique_ptr<Port>& port, int port_idx, uint8_t*& buffer, size_t buffer_size, uint8_t& ingress, ssize_t& pkt_len, uint16_t& vlan_id){
@@ -32,7 +36,7 @@ inline void pollPort(std::unique_ptr<Port>& port, int port_idx, uint8_t*& buffer
 
 }
 inline void processPackets(std::vector<std::unique_ptr<Port>>& portList, pollfd& port_fd, int port_idx, 
-    MacTable& mac_table, std::atomic<bool>* continue_running, Monitor& monitor){
+    MacTable& mac_table, std::atomic<bool>* continue_running, Monitor& monitor, ringBuffer<PacketInfo, 256>& rb){
     uint8_t* buffer;
     uint8_t ingress_port;
     size_t next_port = 0;
