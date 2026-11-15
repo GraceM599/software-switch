@@ -12,7 +12,7 @@
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#include "ring_buffer.h"
+#include "ring_logger.h"
 
 #include <mutex> 
 #include <vector>
@@ -71,7 +71,7 @@ private:
     unsigned int rx_block_idx = 0;
     unsigned int tx_frame_idx = 0;
     bool valid;
-    ringBuffer logger;
+    ringLogger logger;
 
     void fail(const std::string& message);
 

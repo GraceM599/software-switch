@@ -17,7 +17,7 @@
 #include <stdexcept>
 
 
-inline void puntPacket(){
+inline void puntPacket(uint8_t* buffer, ssize_t pkt_len, uint8_t ingress_port){
     //need a queue prob for sending to switch and for recieving from switch though
     //buffers already on ports could probably serve that purpose
     
@@ -54,6 +54,12 @@ inline void processPackets(std::vector<std::unique_ptr<Port>>& portList, pollfd&
         }
 
         EthernetHeader* frame = reinterpret_cast<EthernetHeader*>(buffer);
+
+        if (ntohs(frame->eth_type) == 0x88CC || ntohs(frame->eth_type) == 0x88B5){
+            //punt_packet(buffer, pkt_len, ingress_port);
+            continue;
+        }
+
         mac_table.insert(frame->src_mac, ingress_port, vlan_id);
         uint8_t egress_port = mac_table.destination(frame->dest_mac, vlan_id);
 

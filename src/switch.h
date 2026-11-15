@@ -58,7 +58,7 @@ inline std::vector<PortConfig> parseConfig(const std::string& filename){
 class Switch{
 public:
 Switch(std::string filename, std::atomic<bool>& continue_running, 
-    char**& argv, PacketProcessor dp){
+    char**& argv, PacketProcessor dp, uint32_t switch_id){
     //basically to make a switch all that it needs is a config filename and it will set everything else up
     //makes it easy to make multipel switches
     this->continue_running = &continue_running;
@@ -88,6 +88,8 @@ Switch(std::string filename, std::atomic<bool>& continue_running,
         threads.emplace_back(dp, std::ref(portList), std::ref(ports[i]), i, 
         std::ref(mac_table), this->continue_running, std::ref(monitor));
     } //prob should change continue_running to a shared pointer
+
+    //pipe to the dp?
     for (auto& thread : threads) {
         thread.join();
     }
@@ -156,6 +158,8 @@ Monitor monitor{"swm0", AcceptedFrames::All, 1};
 std::vector<pollfd> ports;
 std::atomic<bool>* continue_running;
 PacketProcessor dp;
+uint32_t switch_id;
+
 
 };
 //config

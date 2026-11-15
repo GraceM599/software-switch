@@ -39,7 +39,7 @@ int main(int argc, char** argv) {
         return 1;
     }
     std::string config = argv[1];
-    Switch s{config, continue_running, argv, processPackets};
+    Switch s{config, continue_running, argv, processPackets, 1};
 
     struct sigaction sa;
     std::memset(&sa, 0, sizeof(sa));
