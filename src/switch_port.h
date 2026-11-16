@@ -73,6 +73,8 @@ private:
     bool valid;
     ringLogger logger;
 
+    std::mutex tx_mutex;
+
     void fail(const std::string& message);
 
     void release_rx_block(tpacket_block_desc* block, size_t block_idx);

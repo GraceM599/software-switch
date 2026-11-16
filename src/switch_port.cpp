@@ -175,6 +175,8 @@ ssize_t Port::get(uint8_t* out_buffer, size_t buffer_size, uint16_t& vlan_id) {
 
 int Port::send(uint8_t* packet, size_t length, uint16_t vlan_id) {
 
+    std::lock_guard<std::mutex> lock(tx_mutex);
+    
     if (!can_egress(vlan_id)) {
         return 1;
     }

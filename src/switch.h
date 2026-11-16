@@ -16,6 +16,7 @@
 #include <map>
 #include <sstream>
 #include <stdexcept>
+#include <optional>
 #include "dp.h"
 #include "packet_struct.h"
 #include "ring_buffer.h"
@@ -103,6 +104,71 @@ inline void stop(){
     *continue_running = 0;
 }
 
+
+inline std::vector<uint8_t> buildLldpframe(uint32_t switch_id, uint16_t port_id,
+                                            uint8_t* src_mac, uint16_t ttl)
+{
+    std::vector<uint8_t> frame;
+    frame.reserve(64);
+
+    frame.insert(frame.end(), {0x01, 0x80, 0xC2, 0x00, 0x00, 0x0E});
+    frame.insert(frame.end(), src_mac, src_mac+6);
+    appendU16(frame, 0x88CC);
+
+    appendU16(frame, TLV_HEADER(1, 5));
+    frame.push_back(7);
+    appendU32(frame, switch_id);
+
+    appendU16(frame, TLV_HEADER(2, 3));
+    frame.push_back(7);
+    appendU16(frame, port_id);
+
+    appendU16(frame, TLV_HEADER(3, 2));
+    appendU16(frame, ttl);
+    appendU16(frame, TLV_HEADER(0, 0));
+
+    frame.resize(60, 0x00);
+    return frame;
+
+}
+
+inline int parseLldpFrame(std::vector<uint8_t>& frame, LldpInfo& ll_info){
+    //switch id, port id, ttl
+    if (frame.size() < 16){
+        return -1;
+    }
+    uint16_t ethertype = (uint16_t)((frame[12] << 8) | frame[13]);
+    if (ethertype != 0x88CC){
+        return -1;
+    }
+
+    int offset = 14; //start of tlv's
+    while (offset + 2 <= frame.size()){
+        int type = frame[14];
+        int length = frame[15];
+        if (type == 1){
+            //switch_id
+            memcpy(&ll_info.switch_id, &frame[offset+2], length);
+            ll_info.switch_id = ntohs(ll_info.switch_id);
+        }
+        if (type == 2){
+            //port id
+            memcpy(&ll_info.port_id, &frame[offset+2], length);
+            ll_info.port_id = ntohs(ll_info.port_id);
+        }
+        if (type == 3){
+            //ttl
+            memcpy(&ll_info.ttl, &frame[offset+2], length);
+            ll_info.ttl = ntohs(ll_info.ttl);
+        }
+        //
+        offset += length;
+
+    }
+    return 0;
+
+}
+
 std::vector<std::string> show_ports(){
     std::vector<std::string> p;
     for (int i = 0; i< portList.size(); ++i){
@@ -161,7 +227,17 @@ std::atomic<bool>* continue_running;
 PacketProcessor dp;
 uint32_t switch_id;
 
-
-};
+inline void appendU16(std::vector<uint8_t>& buf, uint16_t val) {
+    uint16_t net_val = htons(val);
+    buf.push_back(static_cast<uint8_t>(net_val & 0xFF));
+    buf.push_back(static_cast<uint8_t>((net_val >> 8) & 0xFF));
+}
+inline void appendU32(std::vector<uint8_t>& buf, uint32_t val) {
+    uint32_t net_val = htonl(val);
+    buf.push_back(static_cast<uint8_t>(net_val & 0xFF));
+    buf.push_back(static_cast<uint8_t>((net_val >> 8) & 0xFF));
+    buf.push_back(static_cast<uint8_t>((net_val >> 16) & 0xFF));
+    buf.push_back(static_cast<uint8_t>((net_val >> 24) & 0xFF));
+}
 //config
 //dataplane -> function ptr to processPackets function in use
