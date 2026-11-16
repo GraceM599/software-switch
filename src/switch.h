@@ -30,6 +30,11 @@ struct PortConfig {
     uint16_t vlan;
     std::string ip;
 };
+struct NeighborEntry {
+    uint32_t switch_id;
+    uint16_t port_id;
+    std::chrono::steady_clock::time_point expires_at;
+};
 
 inline std::vector<PortConfig> parseConfig(const std::string& filename){
     std::ifstream file(filename);
@@ -91,11 +96,36 @@ Switch(std::string filename, std::atomic<bool>& continue_running,
         std::ref(mac_table), this->continue_running, std::ref(monitor), std::ref(rb));
     } //prob should change continue_running to a shared pointer
 
-    //pipe to the dp?
+    threads.emplace_back(manageControlPackets, std::ref(rb), this);
     for (auto& thread : threads) {
         thread.join();
     }
 
+}
+
+inline void manageControlPackets(ringBuffer<PacketInfo, 256>& rb, Switch* sw){
+    using clock = std::chrono::steady_clock;
+    std::unordered_map<uint16_t, NeighborEntry> neighbor_table;
+
+    while (continue_running){
+        PacketInfo pkt_info;
+        bool success = rb.wait_and_pop(pkt_info, continue_running);
+
+        auto now = clock::now();
+        if (success) {
+            LldpInfo ll_info;
+            parseLldpFrame(pkt_info.data, ll_info);
+        }
+        else{
+            std::vector<uint8_t> frame = buildLldpframe();
+            for (int i = 0; i < portList.size(); ++i){
+                portList[i]->send(frame.data(), frame.size(), 0)
+            }
+        }
+        
+        //every 2 seconds flood packets
+    }
+    
 }
 inline void start(){
     *continue_running = 1;
@@ -241,3 +271,4 @@ inline void appendU32(std::vector<uint8_t>& buf, uint32_t val) {
 }
 //config
 //dataplane -> function ptr to processPackets function in use
+};
