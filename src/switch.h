@@ -96,34 +96,58 @@ Switch(std::string filename, std::atomic<bool>& continue_running,
         std::ref(mac_table), this->continue_running, std::ref(monitor), std::ref(rb));
     } //prob should change continue_running to a shared pointer
 
-    threads.emplace_back(manageControlPackets, std::ref(rb), this);
+    threads.emplace_back(&Switch::manageControlPackets, this, std::ref(rb));
     for (auto& thread : threads) {
         thread.join();
     }
 
 }
 
-inline void manageControlPackets(ringBuffer<PacketInfo, 256>& rb, Switch* sw){
+inline void manageControlPackets(ringBuffer<PacketInfo, 256>& rb){
     using clock = std::chrono::steady_clock;
     std::unordered_map<uint16_t, NeighborEntry> neighbor_table;
 
     while (continue_running){
         PacketInfo pkt_info;
-        bool success = rb.wait_and_pop(pkt_info, continue_running);
+        auto next_hello = clock::now() + std::chrono::seconds(2);
+        bool success = rb.wait_and_pop(pkt_info, continue_running, std::chrono::seconds(2));
 
         auto now = clock::now();
         if (success) {
             LldpInfo ll_info;
-            parseLldpFrame(pkt_info.data, ll_info);
-        }
-        else{
-            std::vector<uint8_t> frame = buildLldpframe();
-            for (int i = 0; i < portList.size(); ++i){
-                portList[i]->send(frame.data(), frame.size(), 0)
+            if (parseLldpFrame(pkt_info.data, ll_info)){
+                uint16_t local_port = pkt_info.ingress_port;
+
+                if (ll_info.ttl == 0) {
+                    neighbor_table.erase(local_port);
+                } else {
+                    neighbor_table[local_port] = NeighborEntry{
+                        ll_info.switch_id,
+                        ll_info.port_id,
+                        now + std::chrono::seconds(ll_info.ttl)
+                    };
+                }
             }
+            
+        }
+        else if (now > next_hello){
+            //2 seconds passed
+            std::vector<uint8_t> frame;
+            for (int i = 0; i < portList.size(); ++i){
+                frame = buildLldpframe(switch_id, i, portList[i]->get_mac(), 6);
+                portList[i]->send(frame.data(), frame.size(), 0);
+            }
+            next_hello = now + std::chrono::seconds(2);
         }
         
-        //every 2 seconds flood packets
+        //iterate through neighbors and remove expired 
+        for (auto it = neighbor_table.begin(); it != neighbor_table.end();) {
+            if (now >= it->second.expires_at) {
+                it = neighbor_table.erase(it);
+            } else {
+                ++it;
+            }
+        }
     }
     
 }
@@ -162,14 +186,14 @@ inline std::vector<uint8_t> buildLldpframe(uint32_t switch_id, uint16_t port_id,
 
 }
 
-inline int parseLldpFrame(std::vector<uint8_t>& frame, LldpInfo& ll_info){
+inline bool parseLldpFrame(std::vector<uint8_t>& frame, LldpInfo& ll_info){
     //switch id, port id, ttl
     if (frame.size() < 16){
-        return -1;
+        return false;
     }
     uint16_t ethertype = (uint16_t)((frame[12] << 8) | frame[13]);
     if (ethertype != 0x88CC){
-        return -1;
+        return false;
     }
 
     int offset = 14; //start of tlv's
@@ -195,7 +219,7 @@ inline int parseLldpFrame(std::vector<uint8_t>& frame, LldpInfo& ll_info){
         offset += length;
 
     }
-    return 0;
+    return true;
 
 }
 

@@ -105,6 +105,16 @@ Port::Port(std::string interface_name, PortMode pm, std::vector<uint16_t> vlan_i
         return;
     }
 
+    struct ifreq ifr{};
+    std::strncpy(ifr.ifr_name, interface.c_str(), IFNAMSIZ - 1);
+    if (ioctl(fd, SIOCGIFHWADDR, &ifr) < 0){
+        fail("SIOCGIFHWADDR failed");
+    }
+    else{
+        std::memcpy(mac, ifr.ifr_hwaddr.sa_data, 6);
+    }
+
+
     valid = true;
     std::cout << "Listening on " << interface << std::endl;
 }

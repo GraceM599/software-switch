@@ -13,7 +13,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include "ring_logger.h"
-
+#include <sys/ioctl.h>
 #include <mutex> 
 #include <vector>
 #include <unordered_set>
@@ -50,9 +50,14 @@ public:
     inline PortMode get_mode(){
         return mode;
     }
+    inline uint8_t* get_mac(){
+        return mac;
+    }
+
     ~Port();
 
 private:
+    uint8_t mac[6];
     std::string interface;
     int fd;
     PortMode mode;
