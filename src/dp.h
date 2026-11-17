@@ -57,10 +57,16 @@ inline void processPackets(std::vector<std::unique_ptr<Port>>& portList, pollfd&
             continue;
         }
 
-        EthernetHeader* frame = reinterpret_cast<EthernetHeader*>(buffer);
-
+        EthernetHeader* frame = reinterpret_cast<EthernetHeader*>(buffer); //TODO: memcpy instead?
+        ISISEthHeader* isis_frame = reinterpret_cast<ISISEthHeader*>(buffer);
         if (ntohs(frame->eth_type) == 0x88CC || ntohs(frame->eth_type) == 0x88B5){
-            //punt_packet(buffer, pkt_len, ingress_port);
+            puntPacket(buffer, pkt_len, ingress_port, rb);
+            continue;
+        } 
+        if (pkt_len >= sizeof(ISISEthHeader) && ntohs(isis_frame->length) <= 1500 && isis_frame->dsap == 0xFE
+            && isis_frame->ssap == 0xFE && isis_frame->control == 0x03 ){
+            //IS-IS lpu
+            puntPacket(buffer, pkt_len, ingress_port, rb);
             continue;
         }
 
