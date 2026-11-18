@@ -65,6 +65,7 @@ public:
         return bytes_sent;
     }
     ssize_t write(uint8_t* pkt, size_t len){
+        return 0;
         if (protocol == AcceptedFrames::None){
             return 0;
         }

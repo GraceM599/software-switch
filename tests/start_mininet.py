@@ -56,8 +56,7 @@ def test_mininet(config, filename):
 
         print("Launching userspace switch...")
         switch_process = subprocess.Popen(
-            ["./build/switch", filename] + root_ifs,
-            start_new_session=True
+            ["./build/switch", filename] + root_ifs
         )
 
         time.sleep(0.5)

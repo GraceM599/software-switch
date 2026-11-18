@@ -14,6 +14,7 @@
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
+#include <chrono>
 volatile sig_atomic_t continue_running = 1;
 MacTable mac_table;
 Monitor monitor("swm0", AcceptedFrames::All, 1);
@@ -113,13 +114,16 @@ void processPackets(std::vector<std::unique_ptr<Port>>& portList, pollfd& port_f
     uint8_t packet_pool[65536];
     uint16_t vlan_id = 0;
 
-    while (continue_running) { //fc
+    while (continue_running) {
         buffer = packet_pool;
         pkt_len = 0;
 
         pollPort(portList[port_idx], port_idx, buffer, sizeof(packet_pool), ingress_port, pkt_len, vlan_id);
         
-        if (pkt_len <= 0) continue; 
+        if (pkt_len <= 0) {
+            std::this_thread::sleep_for(std::chrono::microseconds(100));
+            continue;
+        }
         if (pkt_len < static_cast<ssize_t>(sizeof(EthernetHeader))) {
             std::cerr << "Dropped undersized Ethernet frame ("
                       << pkt_len << " bytes)" << std::endl;
@@ -136,13 +140,13 @@ void processPackets(std::vector<std::unique_ptr<Port>>& portList, pollfd& port_f
             for (int i = 0; i < portList.size(); ++i) {
                 if (ingress_port != i) {
                     if (portList[i]->send(buffer, pkt_len, vlan_id) == 0) {
-                        monitor.write(buffer, pkt_len);
+                    //    monitor.write(buffer, pkt_len);
                     }
                 }
             }
         } else {
             if (portList[egress_port]->send(buffer, pkt_len, vlan_id) == 0) {
-                monitor.write(buffer, pkt_len);
+                //monitor.write(buffer, pkt_len);
             }
         }
     } 
@@ -150,6 +154,8 @@ void processPackets(std::vector<std::unique_ptr<Port>>& portList, pollfd& port_f
 
 int main(int argc, char** argv) {
     std::cout << "Switch main() starting" << std::endl;
+
+    mac_table.clear();
 
     std::vector<PortConfig> config;
     config = parseConfig(argv[1]);

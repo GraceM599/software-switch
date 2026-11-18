@@ -30,6 +30,7 @@ class MacTable{
 public:
     void insert(uint8_t* addr, uint8_t interface, uint16_t vlan_id);
     uint8_t destination(uint8_t* addr, uint16_t vlan_id);
+    void clear();
 
     MacTable();
 private:

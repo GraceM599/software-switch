@@ -13,6 +13,9 @@ uint8_t MacTable::destination(uint8_t* addr, uint16_t vlan_id){
     return table[mk];
 }
 
+void MacTable::clear(){
+    table.clear();
+}
 
 MacTable::MacTable(){
 
