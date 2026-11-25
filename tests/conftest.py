@@ -4,7 +4,7 @@ import os
 from mininet.log import setLogLevel
 from utils import parse_configfile
 
-setLogLevel('critical')
+setLogLevel('info')
 
 
 def pytest_addoption(parser):
