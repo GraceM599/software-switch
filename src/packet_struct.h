@@ -1,7 +1,11 @@
 #ifndef PACKET_STRUCT
 #define PACKET_STRUCT
 #include <vector>
+#include <cstring>
+#include <chrono>
 #include <cstdint>
+#include <array>
+#include <arpa/inet.h>
 #define TLV_HEADER(type, length) static_cast<uint16_t>((((type) & 0x7F) << 9) | ((length) & 0x01FF))
 
 inline void appendU16(std::vector<uint8_t>& buf, uint16_t val) {
@@ -65,13 +69,13 @@ struct PacketInfo {
  };
 
 struct NeighborEntry {
-    uint8_t* switch_id;
+    uint8_t switch_id[6];
     uint16_t port_id;
     uint32_t cost = 10;
     std::chrono::steady_clock::time_point expires_at;
 };
 
-inline std::vector<uint8_t> buildISISframe(uint8_t* switch_id, uint8_t src_mac, uint32_t seq_num,
+inline std::vector<uint8_t> buildISISframe(uint8_t* switch_id, uint8_t* src_mac, uint32_t seq_num,
                                             std::vector<NeighborEntry>& neighbors, 
                                             std::vector<std::array<uint8_t, 6>>& local_hosts)
 {
@@ -128,10 +132,10 @@ inline std::vector<uint8_t> buildISISframe(uint8_t* switch_id, uint8_t src_mac, 
     uint16_t net_eth_len = htons(isis_pdu_len + 3);
     uint16_t net_pdu_len = htons(isis_pdu_len);
 
-    std::memcpy(&frame, &net_eth_len, 2);
-    std::memcpy(&frame, &net_pdu_len, 2);
+    memcpy(&frame, &net_eth_len, 2);
+    memcpy(&frame, &net_pdu_len, 2);
 
-    fletcher_checksum(&frame, isis_pdu_len, 24);
+    //fletcher_checksum(&frame, isis_pdu_len, 24);
 
     if (frame.size() < 60) {
         frame.resize(60, 0x00);

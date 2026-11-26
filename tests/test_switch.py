@@ -182,7 +182,7 @@ class TestSwitch:
             if switch_process.poll() is not None:
                 raise RuntimeError("Switch exited early")
 
-            net.pingAll()
+            assert net.pingAll() == 0, "Hosts could not all reach each other"
 
         finally:
             kill_switch(switch_process)

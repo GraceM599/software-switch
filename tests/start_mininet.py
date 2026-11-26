@@ -1,7 +1,7 @@
 from mininet.net import Mininet
 from mininet.link import Intf
 from mininet.cli import CLI
-from mininet.log import setLogLevel
+from mininet.log import lg, setLogLevel
 import argparse
 import subprocess
 import os
@@ -69,7 +69,14 @@ def test_mininet(config, filename):
                 )
             )
 
-        CLI(net)
+        previous_level = lg.level
+        previous_handler_level = lg.ch.level
+        try:
+            setLogLevel('output')
+            CLI(net)
+        finally:
+            lg.setLevel(previous_level)
+            lg.ch.setLevel(previous_handler_level)
 
     finally:
         kill_switch(switch_process)

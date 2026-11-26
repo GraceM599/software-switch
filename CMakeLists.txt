@@ -8,3 +8,5 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 file(GLOB SWITCH_SOURCES "src/*.cpp")
 
 add_executable(switch ${SWITCH_SOURCES})
+
+target_link_libraries(switch pthread)

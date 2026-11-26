@@ -12,6 +12,7 @@
 #include <functional>
 #include <csignal>
 #include <thread>
+#include <chrono>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -20,14 +21,18 @@
 inline void puntPacket(uint8_t* buffer, ssize_t pkt_len, uint8_t ingress_port, ringBuffer<PacketInfo, 256>& rb){
     //need a queue prob for sending to switch and for recieving from switch though
     //buffers already on ports could probably serve that purpose
-    PacketInfo pkt;
+    PacketInfo pkt{};
+    pkt.data.resize(pkt_len);
     std::memcpy(pkt.data.data(), buffer, pkt_len); //uhh 
     pkt.ingress_port = ingress_port;
-    rb.push(pkt);
+    
+    bool recv = rb.push(pkt);
+    //figure out what to do with recv
     
 }
 inline void pollPort(std::unique_ptr<Port>& port, int port_idx, uint8_t*& buffer, size_t buffer_size, uint8_t& ingress, ssize_t& pkt_len, uint16_t& vlan_id){
     //returns a filled buffer and ingress index if a pkt exists on the port
+    pkt_len = 0;
     if (port->has_pending_packet()){
         ingress = port_idx;
         pkt_len = port->get(buffer, buffer_size, vlan_id);
@@ -44,13 +49,16 @@ inline void processPackets(std::vector<std::unique_ptr<Port>>& portList, pollfd&
     uint8_t packet_pool[65536];
     uint16_t vlan_id = 0;
 
-    while (*continue_running) { //fc
+    while (*continue_running) {
         buffer = packet_pool;
         pkt_len = 0;
 
         pollPort(portList[port_idx], port_idx, buffer, sizeof(packet_pool), ingress_port, pkt_len, vlan_id);
         
-        if (pkt_len <= 0) continue; 
+        if (pkt_len <= 0) {
+            std::this_thread::sleep_for(std::chrono::microseconds(100));
+            continue;
+        }
         if (pkt_len < static_cast<ssize_t>(sizeof(EthernetHeader))) {
             std::cerr << "Dropped undersized Ethernet frame ("
                       << pkt_len << " bytes)" << std::endl;

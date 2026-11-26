@@ -25,15 +25,23 @@ std::vector<PortConfig> parseConfig(const std::string& filename){
 }
 
 Switch::Switch(std::string filename, std::atomic<bool>& continue_running, 
-    char**& argv, PacketProcessor dp, uint32_t switch_id){
+    char**& argv, PacketProcessor dp, uint32_t switch_id_param){
     this->continue_running = &continue_running;
+    
+    // Convert uint32_t switch_id to uint8_t[6] MAC address
+    this->switch_id = new uint8_t[6];
+    this->switch_id[0] = 0x00;
+    this->switch_id[1] = 0x00;
+    this->switch_id[2] = (switch_id_param >> 24) & 0xFF;
+    this->switch_id[3] = (switch_id_param >> 16) & 0xFF;
+    this->switch_id[4] = (switch_id_param >> 8) & 0xFF;
+    this->switch_id[5] = switch_id_param & 0xFF;
+    
     std::cout << "Switch starting" << std::endl;
 
     std::vector<PortConfig> config;
     config = parseConfig(filename);
-    ringBuffer<PacketInfo, 256> rb;
 
-    std::vector<pollfd> ports;
     for (size_t i = 0; i < config.size(); ++i) {
         PortMode pm = config[i].mode == "trunk" ? PortMode::Trunk : PortMode::Access;
         std::vector<uint16_t> vlans = {config[i].vlan};
@@ -49,25 +57,31 @@ Switch::Switch(std::string filename, std::atomic<bool>& continue_running,
     }
     this->dp = dp;
 
-    std::vector<std::thread> threads;
     for (size_t i = 0; i < portList.size(); ++i) {
-        threads.emplace_back(dp, std::ref(portList), std::ref(ports[i]), i, 
-        std::ref(mac_table), this->continue_running, std::ref(monitor), std::ref(rb));
+        threads.emplace_back(this->dp, std::ref(portList), std::ref(ports[i]), i, 
+        std::ref(mac_table), this->continue_running, std::ref(monitor), std::ref(this->rb));
     }
 
-    threads.emplace_back(&Switch::manageControlPackets, this, std::ref(rb));
+    //threads.emplace_back(&Switch::manageControlPackets, this, std::ref(this->rb));
+    //this->threads = std::move(threads);
+}
+
+Switch::~Switch() {
     for (auto& thread : threads) {
-        thread.join();
+        if (thread.joinable()) {
+            thread.join();
+        }
     }
+    delete[] switch_id;
 }
 
 void Switch::manageControlPackets(ringBuffer<PacketInfo, 256>& rb){
     using clock = std::chrono::steady_clock;
     std::unordered_map<uint16_t, NeighborEntry> neighbor_table;
+    auto next_hello = clock::now() + std::chrono::seconds(2);
 
     while (continue_running){
         PacketInfo pkt_info;
-        auto next_hello = clock::now() + std::chrono::seconds(2);
         bool success = rb.wait_and_pop(pkt_info, continue_running, std::chrono::seconds(2));
 
         auto now = clock::now();
@@ -79,17 +93,17 @@ void Switch::manageControlPackets(ringBuffer<PacketInfo, 256>& rb){
                 if (ll_info.ttl == 0) {
                     neighbor_table.erase(local_port);
                 } else {
-                    neighbor_table[local_port] = NeighborEntry{
-                        ll_info.switch_id,
-                        ll_info.port_id,
-                        10,
-                        now + std::chrono::seconds(ll_info.ttl)
-                    };
+                    NeighborEntry ne;
+                    std::memcpy(ne.switch_id, ll_info.switch_id, 6);
+                    ne.port_id = ll_info.port_id;
+                    ne.cost = 10;
+                    ne.expires_at = now + std::chrono::seconds(ll_info.ttl);
+                    neighbor_table[local_port] = ne;
                 }
             }
             
         }
-        else if (now > next_hello){
+        if (now > next_hello){
             std::vector<uint8_t> frame;
             for (int i = 0; i < portList.size(); ++i){
                 frame = buildLldpframe(switch_id, i, portList[i]->get_mac(), 6);

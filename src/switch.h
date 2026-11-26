@@ -39,6 +39,7 @@ class Switch{
 public:
 Switch(std::string filename, std::atomic<bool>& continue_running, 
     char**& argv, PacketProcessor dp, uint32_t switch_id);
+~Switch();
 
 void manageControlPackets(ringBuffer<PacketInfo, 256>& rb);
 inline void start(){
@@ -67,6 +68,8 @@ std::vector<pollfd> ports;
 std::atomic<bool>* continue_running;
 PacketProcessor dp;
 uint8_t* switch_id;
+std::vector<std::thread> threads;
+ringBuffer<PacketInfo, 256> rb;
 
 inline void appendU16(std::vector<uint8_t>& buf, uint16_t val) {
     uint16_t net_val = htons(val);
