@@ -26,7 +26,7 @@ inline void puntPacket(uint8_t* buffer, ssize_t pkt_len, uint8_t ingress_port, r
     std::memcpy(pkt.data.data(), buffer, pkt_len); //uhh 
     pkt.ingress_port = ingress_port;
     
-    bool recv = rb.push(pkt);
+    bool recv = rb.push(std::move(pkt));
     //figure out what to do with recv
     
 }

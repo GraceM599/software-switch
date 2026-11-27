@@ -59,11 +59,10 @@ Switch::Switch(std::string filename, std::atomic<bool>& continue_running,
 
     for (size_t i = 0; i < portList.size(); ++i) {
         threads.emplace_back(this->dp, std::ref(portList), std::ref(ports[i]), i, 
-        std::ref(mac_table), this->continue_running, std::ref(monitor), std::ref(this->rb));
+        std::ref(mac_table), std::ref(this->continue_running), std::ref(monitor), std::ref(this->rb));
     }
 
-    //threads.emplace_back(&Switch::manageControlPackets, this, std::ref(this->rb));
-    //this->threads = std::move(threads);
+    threads.emplace_back(&Switch::manageControlPackets, this, std::ref(this->rb));
 }
 
 Switch::~Switch() {
@@ -80,9 +79,9 @@ void Switch::manageControlPackets(ringBuffer<PacketInfo, 256>& rb){
     std::unordered_map<uint16_t, NeighborEntry> neighbor_table;
     auto next_hello = clock::now() + std::chrono::seconds(2);
 
-    while (continue_running){
+    while (*continue_running){
         PacketInfo pkt_info;
-        bool success = rb.wait_and_pop(pkt_info, continue_running, std::chrono::seconds(2));
+        bool success = rb.wait_and_pop(pkt_info, *continue_running, std::chrono::seconds(2));
 
         auto now = clock::now();
         if (success) {
